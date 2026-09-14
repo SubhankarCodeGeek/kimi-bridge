@@ -84,7 +84,7 @@ class IntegrationTests(unittest.TestCase):
     def test_health_and_models(self) -> None:
         try:
             port = free_port()
-        except PermissionError:
+        except (PermissionError, OSError):
             self.skipTest("Local sockets are not permitted in this environment.")
 
         config = AppConfig(server=ServerConfig(port=port))
@@ -101,7 +101,7 @@ class IntegrationTests(unittest.TestCase):
     def test_options_cors(self) -> None:
         try:
             port = free_port()
-        except PermissionError:
+        except (PermissionError, OSError):
             self.skipTest("Local sockets are not permitted in this environment.")
 
         config = AppConfig(server=ServerConfig(port=port))
@@ -119,7 +119,7 @@ class IntegrationTests(unittest.TestCase):
         try:
             upstream_port = free_port()
             proxy_port = free_port()
-        except PermissionError:
+        except (PermissionError, OSError):
             self.skipTest("Local sockets are not permitted in this environment.")
 
         MockUpstreamHandler.received = None
@@ -167,7 +167,7 @@ class IntegrationTests(unittest.TestCase):
         try:
             upstream_port = free_port()
             proxy_port = free_port()
-        except PermissionError:
+        except (PermissionError, OSError):
             self.skipTest("Local sockets are not permitted in this environment.")
 
         MockStreamUpstreamHandler.received = None
