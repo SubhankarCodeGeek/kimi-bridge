@@ -1,0 +1,13 @@
+
+# Catalyst Agent Memory
+.catalyst/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+dist/
+build/
+*.egg-info/
+.agents/
+.codex/

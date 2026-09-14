@@ -1,0 +1,15 @@
+{
+  "model": "kimi-k3",
+  "parallel_tool_calls": true,
+  "store": true,
+  "messages": [
+    {
+      "role": "developer",
+      "content": "Follow the project instructions."
+    },
+    {
+      "role": "user",
+      "content": "Say hello."
+    }
+  ]
+}

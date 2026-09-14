@@ -1,0 +1,13 @@
+[Unit]
+Description=KimiBridge local compatibility gateway
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=__INSTALL_DIR__
+ExecStart=__PYTHON_BIN__ -m kimibridge.cli start --auto-port
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target

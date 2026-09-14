@@ -1,0 +1,58 @@
+name: Test
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+jobs:
+  python:
+    name: Python ${{ matrix.python-version }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ["3.10", "3.11", "3.12"]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Compile
+        run: python -m compileall kimibridge tests
+
+      - name: Test
+        run: python -m unittest discover -s tests
+
+  installers:
+    name: Installer syntax
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check shell installers
+        run: |
+          bash -n installers/install.sh
+          bash -n installers/uninstall.sh
+
+  powershell:
+    name: PowerShell syntax
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Parse PowerShell installers
+        shell: pwsh
+        run: |
+          $null = [System.Management.Automation.PSParser]::Tokenize((Get-Content .\installers\install.ps1 -Raw), [ref]$null)
+          $null = [System.Management.Automation.PSParser]::Tokenize((Get-Content .\installers\uninstall.ps1 -Raw), [ref]$null)
