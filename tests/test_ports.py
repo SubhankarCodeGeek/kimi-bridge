@@ -28,7 +28,7 @@ class PortTests(unittest.TestCase):
     def test_conflict_without_auto_port_reports_conflict(self) -> None:
         try:
             sock, port = reserve_port()
-        except PermissionError:
+        except (PermissionError, OSError):
             self.skipTest("Local sockets are not permitted in this environment.")
         try:
             resolution = resolve_port("127.0.0.1", port, auto_port=False)
@@ -41,7 +41,7 @@ class PortTests(unittest.TestCase):
     def test_conflict_with_auto_port_uses_fallback(self) -> None:
         try:
             sock, port = reserve_port()
-        except PermissionError:
+        except (PermissionError, OSError):
             self.skipTest("Local sockets are not permitted in this environment.")
         try:
             resolution = resolve_port("127.0.0.1", port, auto_port=True)

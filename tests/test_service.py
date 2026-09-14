@@ -109,7 +109,7 @@ class ServiceTests(unittest.TestCase):
 
         self.assertTrue(result.ok)
         self.assertEqual(run.call_args.args[0][0], "bash")
-        self.assertTrue(run.call_args.args[0][1].endswith("installers/uninstall.sh"))
+        self.assertTrue(str(run.call_args.args[0][1]).replace("\\", "/").endswith("installers/uninstall.sh"))
 
     def test_windows_uninstall_uses_powershell_uninstaller(self) -> None:
         with patch("platform.system", return_value="Windows"):
@@ -119,7 +119,7 @@ class ServiceTests(unittest.TestCase):
 
         self.assertTrue(result.ok)
         self.assertEqual(run.call_args.args[0][0], "powershell")
-        self.assertTrue(run.call_args.args[0][-1].endswith("installers/uninstall.ps1"))
+        self.assertTrue(str(run.call_args.args[0][-1]).replace("\\", "/").endswith("installers/uninstall.ps1"))
 
 
 if __name__ == "__main__":

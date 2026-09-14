@@ -31,7 +31,9 @@ def check_port_available(host: str, port: int) -> bool | None:
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             sock.bind((host, port))
             return True
-    except PermissionError:
+    except PermissionError as exc:
+        if getattr(exc, "winerror", None) == 10013 or getattr(exc, "errno", None) in (13, 10013):
+            return False
         return None
     except OSError:
         return False
