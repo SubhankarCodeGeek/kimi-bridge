@@ -14,7 +14,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 DIST_DIR = REPO_ROOT / "dist"
 
 
-def get_target_name() -> str:
+def get_target_info() -> tuple[str, str]:
     system = platform.system().lower()
     machine = platform.machine().lower()
 
@@ -25,8 +25,9 @@ def get_target_name() -> str:
     else:
         arch = machine
 
+    stem = f"kimibridge-{system}-{arch}"
     ext = ".exe" if system == "windows" else ""
-    return f"kimibridge-{system}-{arch}{ext}"
+    return stem, f"{stem}{ext}"
 
 
 def compute_sha256(file_path: Path) -> str:
@@ -42,7 +43,7 @@ def generate_checksums(dist_dir: Path = DIST_DIR) -> Path:
     lines: list[str] = []
 
     for item in sorted(dist_dir.glob("kimibridge*")):
-        if item.is_file() and item.name != "SHA256SUMS.txt":
+        if item.is_file() and item.name != "SHA256SUMS.txt" and not item.name.startswith("_"):
             digest = compute_sha256(item)
             lines.append(f"{digest}  {item.name}")
 
@@ -51,24 +52,38 @@ def generate_checksums(dist_dir: Path = DIST_DIR) -> Path:
     return checksum_file
 
 
-def build_pyinstaller(target_name: str) -> Path:
+def build_pyinstaller(target_stem: str, target_name: str) -> Path:
+    work_dir = DIST_DIR / "_build"
+    spec_dir = DIST_DIR / "_spec"
     cmd = [
         sys.executable,
         "-m",
         "PyInstaller",
         "--onefile",
         "--name",
-        target_name,
+        target_stem,
         "--distpath",
         str(DIST_DIR),
         "--workpath",
-        str(DIST_DIR / "build"),
+        str(work_dir),
         "--specpath",
-        str(DIST_DIR / "spec"),
+        str(spec_dir),
         str(REPO_ROOT / "kimibridge" / "cli.py"),
     ]
     subprocess.run(cmd, check=True)
-    return DIST_DIR / target_name
+
+    if work_dir.exists():
+        shutil.rmtree(work_dir, ignore_errors=True)
+    if spec_dir.exists():
+        shutil.rmtree(spec_dir, ignore_errors=True)
+
+    output_path = DIST_DIR / target_name
+    if not output_path.exists():
+        stem_path = DIST_DIR / target_stem
+        if stem_path.exists() and stem_path != output_path:
+            shutil.move(stem_path, output_path)
+
+    return output_path
 
 
 def build_zipapp(target_name: str) -> Path:
@@ -80,7 +95,6 @@ def build_zipapp(target_name: str) -> Path:
         main="kimibridge.cli:main",
         compressed=True,
     )
-    # Ensure execution permissions on Unix
     if platform.system().lower() != "windows":
         target_path.chmod(target_path.stat().st_mode | 0o755)
     return target_path
@@ -88,7 +102,7 @@ def build_zipapp(target_name: str) -> Path:
 
 def main() -> int:
     DIST_DIR.mkdir(parents=True, exist_ok=True)
-    target_name = get_target_name()
+    target_stem, target_name = get_target_info()
     print(f"Building binary artifact: {target_name}")
 
     has_pyinstaller = False
@@ -105,7 +119,7 @@ def main() -> int:
 
     if has_pyinstaller:
         print("Using PyInstaller for standalone compilation...")
-        artifact = build_pyinstaller(target_name)
+        artifact = build_pyinstaller(target_stem, target_name)
     else:
         print("PyInstaller not found. Building portable zipapp binary executable...")
         artifact = build_zipapp(target_name)

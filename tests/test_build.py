@@ -3,14 +3,15 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from scripts.build_binary import compute_sha256, generate_checksums, get_target_name
+from scripts.build_binary import compute_sha256, generate_checksums, get_target_info
 
 
 class BuildBinaryTests(unittest.TestCase):
-    def test_get_target_name_format(self) -> None:
-        target_name = get_target_name()
+    def test_get_target_info_format(self) -> None:
+        target_stem, target_name = get_target_info()
+        self.assertTrue(target_stem.startswith("kimibridge-"))
         self.assertTrue(target_name.startswith("kimibridge-"))
-        self.assertIn("-", target_name)
+        self.assertIn("-", target_stem)
 
     def test_compute_sha256(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
