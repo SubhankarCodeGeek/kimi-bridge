@@ -21,7 +21,7 @@ function Find-Python {
         return "python"
     }
 
-    throw "Python is required until native binaries are published."
+    throw "Python 3 is required on host when standalone binary is not built. Please install Python 3 or build a standalone binary via python scripts\build_binary.py."
 }
 
 Write-Host "KimiBridge Installer"
@@ -33,15 +33,34 @@ New-Item -ItemType Directory -Force -Path $ConfigDir | Out-Null
 
 Copy-Item -Path (Join-Path $RepoRoot "*") -Destination $InstallDir -Recurse -Force
 
+$BinaryCandidate = Join-Path $RepoRoot "dist\kimibridge-windows-x86_64.exe"
+if (Test-Path $BinaryCandidate) {
+    Write-Host "Found standalone binary artifact: $BinaryCandidate"
+    $BinDir = Join-Path $InstallDir "bin"
+    New-Item -ItemType Directory -Force -Path $BinDir | Out-Null
+    Copy-Item -Path $BinaryCandidate -Destination (Join-Path $BinDir "kimibridge.exe") -Force
+    $ExecPath = Join-Path $BinDir "kimibridge.exe"
+    $ExecArgs = "start --auto-port"
+} else {
+    Write-Host "Standalone binary not found. Falling back to Python runtime."
+    $PythonBin = Find-Python
+    $ExecPath = $PythonBin
+    $ExecArgs = "-m kimibridge.cli start --auto-port"
+}
+
 Push-Location $InstallDir
 try {
-    & $PythonBin -m kimibridge.cli start --auto-port --save-port --dry-run
+    if ($ExecPath -eq $PythonBin) {
+        & $PythonBin -m kimibridge.cli start --auto-port --save-port --dry-run
+    } else {
+        & $ExecPath start --auto-port --save-port --dry-run
+    }
 }
 finally {
     Pop-Location
 }
 
-$Action = New-ScheduledTaskAction -Execute $PythonBin -Argument "-m kimibridge.cli start --auto-port" -WorkingDirectory $InstallDir
+$Action = New-ScheduledTaskAction -Execute $ExecPath -Argument $ExecArgs -WorkingDirectory $InstallDir
 $Trigger = New-ScheduledTaskTrigger -AtLogOn
 $Principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive
 $Task = New-ScheduledTask -Action $Action -Trigger $Trigger -Principal $Principal
@@ -51,6 +70,10 @@ Start-ScheduledTask -TaskName $TaskName
 
 Write-Host ""
 Write-Host "KimiBridge is installed."
-& $PythonBin -m kimibridge.cli config show
+if ($ExecPath -eq $PythonBin) {
+    & $PythonBin -m kimibridge.cli config show
+} else {
+    & $ExecPath config show
+}
 Write-Host ""
 Write-Host "Use the endpoint above in Android Studio as an OpenAI-compatible provider."

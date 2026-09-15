@@ -122,5 +122,87 @@ class ServiceTests(unittest.TestCase):
         self.assertTrue(str(run.call_args.args[0][-1]).replace("\\", "/").endswith("installers/uninstall.ps1"))
 
 
+class InstallerServiceTemplateTests(unittest.TestCase):
+    def test_linux_service_template_rendering_python(self) -> None:
+        from pathlib import Path
+        import tempfile
+        import subprocess
+
+        repo_root = Path(__file__).resolve().parents[1]
+        template = repo_root / "services" / "linux" / "kimibridge.service"
+        exec_cmd = "/usr/bin/python3 -m kimibridge.cli"
+        install_dir = "/home/testuser/.kimibridge/app"
+
+        with tempfile.NamedTemporaryFile("w+", delete=False) as tmp:
+            tmp_path = Path(tmp.name)
+
+        cmd = [
+            "sed",
+            "-e", f"s#__EXEC_CMD__#{exec_cmd}#g",
+            "-e", f"s#__PYTHON_BIN__#{exec_cmd}#g",
+            "-e", f"s#__INSTALL_DIR__#{install_dir}#g",
+            str(template),
+        ]
+        res = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        rendered = res.stdout
+
+        self.assertIn("ExecStart=/usr/bin/python3 -m kimibridge.cli start --auto-port", rendered)
+        self.assertNotIn("-m kimibridge.cli -m kimibridge.cli", rendered)
+        self.assertIn(f"WorkingDirectory={install_dir}", rendered)
+
+    def test_linux_service_template_rendering_binary(self) -> None:
+        from pathlib import Path
+        import tempfile
+        import subprocess
+
+        repo_root = Path(__file__).resolve().parents[1]
+        template = repo_root / "services" / "linux" / "kimibridge.service"
+        exec_cmd = "/home/testuser/.kimibridge/app/bin/kimibridge"
+        install_dir = "/home/testuser/.kimibridge/app"
+
+        cmd = [
+            "sed",
+            "-e", f"s#__EXEC_CMD__#{exec_cmd}#g",
+            "-e", f"s#__PYTHON_BIN__#{exec_cmd}#g",
+            "-e", f"s#__INSTALL_DIR__#{install_dir}#g",
+            str(template),
+        ]
+        res = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        rendered = res.stdout
+
+        self.assertIn("ExecStart=/home/testuser/.kimibridge/app/bin/kimibridge start --auto-port", rendered)
+        self.assertNotIn("-m kimibridge.cli", rendered)
+
+    def test_macos_service_template_rendering(self) -> None:
+        from pathlib import Path
+        import tempfile
+        import subprocess
+
+        repo_root = Path(__file__).resolve().parents[1]
+        template = repo_root / "services" / "macos" / "com.kimibridge.proxy.plist"
+        exec_cmd = "/usr/bin/python3 -m kimibridge.cli"
+        install_dir = "/home/testuser/.kimibridge/app"
+
+        program_args = []
+        for arg in f"{exec_cmd} start --auto-port".split():
+            program_args.append(f"    <string>{arg}</string>")
+        args_str = "\n".join(program_args)
+
+        awk_script = """
+        /__PROGRAM_ARGUMENTS__/ { print args; next }
+        { gsub(/__INSTALL_DIR__/, dir); print }
+        """
+        cmd = ["awk", "-v", f"args={args_str}", "-v", f"dir={install_dir}", awk_script, str(template)]
+        res = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        rendered = res.stdout
+
+        self.assertIn("<string>/usr/bin/python3</string>", rendered)
+        self.assertIn("<string>-m</string>", rendered)
+        self.assertIn("<string>kimibridge.cli</string>", rendered)
+        self.assertIn("<string>start</string>", rendered)
+        self.assertIn("<string>--auto-port</string>", rendered)
+        self.assertNotIn("__PROGRAM_ARGUMENTS__", rendered)
+
+
 if __name__ == "__main__":
     unittest.main()

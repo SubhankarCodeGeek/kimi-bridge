@@ -8,11 +8,7 @@
 
   <key>ProgramArguments</key>
   <array>
-    <string>__PYTHON_BIN__</string>
-    <string>-m</string>
-    <string>kimibridge.cli</string>
-    <string>start</string>
-    <string>--auto-port</string>
+__PROGRAM_ARGUMENTS__
   </array>
 
   <key>WorkingDirectory</key>

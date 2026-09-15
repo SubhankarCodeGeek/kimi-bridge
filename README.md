@@ -22,31 +22,53 @@
 
 ---
 
-## 🚀 Quick Start (2-Minute Setup for Android Developers)
+## 🚀 Quick Start (2-Minute Setup for Host Machine Users)
 
 ### Step 1: Install & Start Background Service
 
-Clone the repository and run the installer script:
+Clone the repository and run the installer script on your host machine:
 
-**macOS / Linux:**
+**Linux / macOS:**
 ```bash
-git clone https://github.com/subhankar-android/kimi-bridge.git
+git clone https://github.com/SubhankarCodeGeek/kimi-bridge.git
 cd kimi-bridge
 ./installers/install.sh
 ```
 
 **Windows (PowerShell):**
 ```powershell
-git clone https://github.com/subhankar-android/kimi-bridge.git
+git clone https://github.com/SubhankarCodeGeek/kimi-bridge.git
 cd kimi-bridge
 .\installers\install.ps1
 ```
 
-> **Note:** The installer automatically registers KimiBridge as a background user service (`launchd` on macOS, `systemctl` on Linux, `Task Scheduler` on Windows) listening on `http://127.0.0.1:5001/v1`.
+> **Note:** The installer automatically registers KimiBridge as a background user service (`systemctl --user` on Linux, `launchd` on macOS, `Task Scheduler` on Windows) listening on `http://127.0.0.1:5001/v1`.
 
 ---
 
-### Step 2: Configure Android Studio
+### Step 2: Verify Host Service Health
+
+Run diagnostics to confirm the background gateway is running properly:
+
+```bash
+python3 -m kimibridge.cli doctor
+```
+
+On Linux host machines, you can also manage and inspect the systemd user daemon directly:
+
+```bash
+# Check systemd user service status
+systemctl --user status kimibridge
+
+# View recent service logs
+python3 -m kimibridge.cli logs
+# or
+journalctl --user -u kimibridge -n 50 --no-pager
+```
+
+---
+
+### Step 3: Configure Android Studio
 
 1. Open **Android Studio** ➔ **Settings** (or **Preferences** on macOS) ➔ **Tools** ➔ **AI Assistant** (or Custom LLM Provider).
 2. Select **OpenAI-compatible**.
@@ -58,12 +80,12 @@ cd kimi-bridge
 
 ---
 
-### Step 3: Enjoy AI Assistance in Android Studio!
+### Step 4: Enjoy AI Assistance in Android Studio!
 
-KimiBridge automatically runs in the background. If you ever need to verify system health or troubleshoot, simply run:
+KimiBridge automatically runs in the background. If you ever need to restart or manage the proxy service, run:
 
 ```bash
-python3 -m kimibridge.cli doctor
+python3 -m kimibridge.cli restart
 ```
 
 ---

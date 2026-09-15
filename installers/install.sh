@@ -68,12 +68,21 @@ install_macos_service() {
   local exec_cmd="$1"
   local plist_dir="$HOME/Library/LaunchAgents"
   local plist_path="$plist_dir/com.kimibridge.proxy.plist"
+  local program_args=""
+
+  for arg in $exec_cmd start --auto-port; do
+    if [ -n "$program_args" ]; then
+      program_args="${program_args}
+"
+    fi
+    program_args="${program_args}    <string>${arg}</string>"
+  done
 
   mkdir -p "$plist_dir"
-  sed \
-    -e "s#__PYTHON_BIN__#$exec_cmd#g" \
-    -e "s#__INSTALL_DIR__#$INSTALL_DIR#g" \
-    "$INSTALL_DIR/services/macos/com.kimibridge.proxy.plist" > "$plist_path"
+  awk -v args="$program_args" -v dir="$INSTALL_DIR" '
+    /__PROGRAM_ARGUMENTS__/ { print args; next }
+    { gsub(/__INSTALL_DIR__/, dir); print }
+  ' "$INSTALL_DIR/services/macos/com.kimibridge.proxy.plist" > "$plist_path"
 
   launchctl unload "$plist_path" >/dev/null 2>&1 || true
   launchctl load "$plist_path"
@@ -89,6 +98,7 @@ install_linux_service() {
 
   mkdir -p "$service_dir"
   sed \
+    -e "s#__EXEC_CMD__#$exec_cmd#g" \
     -e "s#__PYTHON_BIN__#$exec_cmd#g" \
     -e "s#__INSTALL_DIR__#$INSTALL_DIR#g" \
     "$INSTALL_DIR/services/linux/kimibridge.service" > "$service_path"
@@ -121,7 +131,7 @@ main() {
     exec_cmd="$INSTALL_DIR/bin/kimibridge"
   else
     log "Standalone binary not found at $binary_candidate. Falling back to Python runtime."
-    python_bin="$(detect_python || fail 'python3 is required when native binaries are not built.')"
+    python_bin="$(detect_python || fail 'python3 is required on host when standalone binary is not built. Install python3 (e.g., sudo apt install python3) or build a standalone binary via python3 scripts/build_binary.py.')"
     exec_cmd="$python_bin -m kimibridge.cli"
   fi
 

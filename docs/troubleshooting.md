@@ -34,3 +34,27 @@ To check whether the proxy is running:
 ```bash
 python3 -m kimibridge.cli status
 ```
+
+## Background Service (Linux systemd)
+
+On Linux hosts, KimiBridge runs as a `systemd --user` service named `kimibridge`.
+
+To view recent logs:
+
+```bash
+python3 -m kimibridge.cli logs
+```
+
+Or query systemd directly:
+
+```bash
+systemctl --user status kimibridge
+journalctl --user -u kimibridge -n 50 --no-pager
+```
+
+To restart the background service:
+
+```bash
+python3 -m kimibridge.cli restart
+```
+
