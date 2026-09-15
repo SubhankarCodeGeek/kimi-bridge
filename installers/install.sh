@@ -68,19 +68,16 @@ install_macos_service() {
   local exec_cmd="$1"
   local plist_dir="$HOME/Library/LaunchAgents"
   local plist_path="$plist_dir/com.kimibridge.proxy.plist"
-  local program_args=""
-
-  for arg in $exec_cmd start --auto-port; do
-    if [ -n "$program_args" ]; then
-      program_args="${program_args}
-"
-    fi
-    program_args="${program_args}    <string>${arg}</string>"
-  done
 
   mkdir -p "$plist_dir"
-  awk -v args="$program_args" -v dir="$INSTALL_DIR" '
-    /__PROGRAM_ARGUMENTS__/ { print args; next }
+  awk -v cmd="$exec_cmd" -v dir="$INSTALL_DIR" '
+    /__PROGRAM_ARGUMENTS__/ {
+      n = split(cmd " start --auto-port", a, " ")
+      for (i = 1; i <= n; i++) {
+        print "    <string>" a[i] "</string>"
+      }
+      next
+    }
     { gsub(/__INSTALL_DIR__/, dir); print }
   ' "$INSTALL_DIR/services/macos/com.kimibridge.proxy.plist" > "$plist_path"
 

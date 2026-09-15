@@ -175,7 +175,6 @@ class InstallerServiceTemplateTests(unittest.TestCase):
 
     def test_macos_service_template_rendering(self) -> None:
         from pathlib import Path
-        import tempfile
         import subprocess
 
         repo_root = Path(__file__).resolve().parents[1]
@@ -183,16 +182,17 @@ class InstallerServiceTemplateTests(unittest.TestCase):
         exec_cmd = "/usr/bin/python3 -m kimibridge.cli"
         install_dir = "/home/testuser/.kimibridge/app"
 
-        program_args = []
-        for arg in f"{exec_cmd} start --auto-port".split():
-            program_args.append(f"    <string>{arg}</string>")
-        args_str = "\n".join(program_args)
-
         awk_script = """
-        /__PROGRAM_ARGUMENTS__/ { print args; next }
+        /__PROGRAM_ARGUMENTS__/ {
+            n = split(cmd " start --auto-port", a, " ")
+            for (i = 1; i <= n; i++) {
+                print "    <string>" a[i] "</string>"
+            }
+            next
+        }
         { gsub(/__INSTALL_DIR__/, dir); print }
         """
-        cmd = ["awk", "-v", f"args={args_str}", "-v", f"dir={install_dir}", awk_script, str(template)]
+        cmd = ["awk", "-v", f"cmd={exec_cmd}", "-v", f"dir={install_dir}", awk_script, str(template)]
         res = subprocess.run(cmd, capture_output=True, text=True, check=True)
         rendered = res.stdout
 
