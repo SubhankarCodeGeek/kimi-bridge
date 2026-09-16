@@ -49,6 +49,7 @@ install_source() {
     --exclude '.agents' \
     --exclude '__pycache__' \
     --exclude '.venv' \
+    --exclude 'dist' \
     -cf - . | tar -C "$INSTALL_DIR" -xf -
 }
 
