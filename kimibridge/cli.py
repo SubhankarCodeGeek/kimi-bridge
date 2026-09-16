@@ -60,7 +60,7 @@ def build_parser() -> argparse.ArgumentParser:
     set_config = config_subparsers.add_parser("set", help="Set a config value.")
     set_config.add_argument(
         "key",
-        choices=["base-url", "compatibility-mode", "host", "port"],
+        choices=["base-url", "compatibility-mode", "fallback-base-url", "host", "port"],
     )
     set_config.add_argument("value")
     return parser
@@ -145,6 +145,7 @@ def doctor() -> int:
     print(f"Configured endpoint: {endpoint}")
     print(f"Compatibility mode: {config.compatibility.mode}")
     print(f"Kimi base URL: {config.kimi.base_url}")
+    print(f"Kimi fallback base URL: {config.kimi.fallback_base_url or 'None'}")
     print(f"Port status: {resolution.status}")
     print(resolution.message)
 
@@ -239,7 +240,11 @@ def set_config_value(key: str, value: str) -> int:
         config = replace(config, server=replace(config.server, host=value))
 
     elif key == "base-url":
-        config = replace(config, kimi=KimiConfig(base_url=value))
+        config = replace(config, kimi=replace(config.kimi, base_url=value))
+
+    elif key == "fallback-base-url":
+        fallback_val = value if value.strip().lower() != "none" and value.strip() != "" else None
+        config = replace(config, kimi=replace(config.kimi, fallback_base_url=fallback_val))
 
     elif key == "compatibility-mode":
         if value not in VALID_MODES:

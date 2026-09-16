@@ -20,6 +20,7 @@ class ServerConfig:
 @dataclass(frozen=True)
 class KimiConfig:
     base_url: str = DEFAULT_BASE_URL
+    fallback_base_url: str | None = None
 
 
 @dataclass(frozen=True)
@@ -51,12 +52,18 @@ def load_config(path: Path | None = None) -> AppConfig:
     kimi = data.get("kimi", {})
     compatibility = data.get("compatibility", {})
 
+    fallback_raw = kimi.get("fallback_base_url")
+    fallback_base_url = str(fallback_raw) if fallback_raw is not None else None
+
     return AppConfig(
         server=ServerConfig(
             host=str(server.get("host", DEFAULT_HOST)),
             port=int(server.get("port", DEFAULT_PORT)),
         ),
-        kimi=KimiConfig(base_url=str(kimi.get("base_url", DEFAULT_BASE_URL))),
+        kimi=KimiConfig(
+            base_url=str(kimi.get("base_url", DEFAULT_BASE_URL)),
+            fallback_base_url=fallback_base_url,
+        ),
         compatibility=CompatibilityConfig(
             mode=str(compatibility.get("mode", "compatible"))
         ),
@@ -71,6 +78,7 @@ def config_to_dict(config: AppConfig) -> dict[str, Any]:
         },
         "kimi": {
             "base_url": config.kimi.base_url,
+            "fallback_base_url": config.kimi.fallback_base_url,
         },
         "compatibility": {
             "mode": config.compatibility.mode,

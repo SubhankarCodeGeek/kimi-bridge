@@ -27,7 +27,15 @@ function Find-Python {
 Write-Host "KimiBridge Installer"
 Write-Host "Install directory: $InstallDir"
 
-$PythonBin = Find-Python
+Write-Host "Cleaning up any existing installation..."
+Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue | ForEach-Object {
+    Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+    Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
+}
+if (Test-Path $InstallDir) {
+    Remove-Item -Path $InstallDir -Recurse -Force -ErrorAction SilentlyContinue
+}
+
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 New-Item -ItemType Directory -Force -Path $ConfigDir | Out-Null
 

@@ -106,6 +106,28 @@ install_linux_service() {
   systemctl --user restart "$SERVICE_NAME"
 }
 
+cleanup_previous_install() {
+  local os="$1"
+  log "Cleaning up any existing installation..."
+  case "$os" in
+    macos)
+      local plist_path="$HOME/Library/LaunchAgents/com.kimibridge.proxy.plist"
+      launchctl unload "$plist_path" >/dev/null 2>&1 || true
+      rm -f "$plist_path"
+      ;;
+    linux)
+      local service_path="$HOME/.config/systemd/user/kimibridge.service"
+      if command -v systemctl >/dev/null 2>&1; then
+        systemctl --user stop kimibridge >/dev/null 2>&1 || true
+        systemctl --user disable kimibridge >/dev/null 2>&1 || true
+        rm -f "$service_path"
+        systemctl --user daemon-reload >/dev/null 2>&1 || true
+      fi
+      ;;
+  esac
+  rm -rf "$INSTALL_DIR"
+}
+
 main() {
   local os
   local arch
@@ -120,6 +142,8 @@ main() {
   log "KimiBridge Installer"
   log "OS: $os ($arch)"
   log "Install directory: $INSTALL_DIR"
+
+  cleanup_previous_install "$os"
 
   install_source
 

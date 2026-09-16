@@ -64,31 +64,74 @@ class KimiBridgeHandler(BaseHTTPRequestHandler):
             return
 
         headers = self._forward_headers()
-        client = KimiUpstreamClient(config.kimi.base_url)
+        clients_to_try = [KimiUpstreamClient(config.kimi.base_url)]
+        if config.kimi.fallback_base_url and config.kimi.fallback_base_url.rstrip("/") != config.kimi.base_url.rstrip("/"):
+            clients_to_try.append(KimiUpstreamClient(config.kimi.fallback_base_url))
 
         if upstream_payload.get("stream") is True:
-            try:
-                with client.stream_chat_completions(headers, upstream_payload) as stream_resp:
-                    content_type = stream_resp.headers.get("Content-Type", "text/event-stream")
-                    self.send_response(stream_resp.status)
-                    self._add_cors_headers()
-                    self.send_header("Content-Type", content_type)
-                    self.send_header("Cache-Control", "no-cache")
-                    self.send_header("Connection", "close")
-                    self.end_headers()
+            for idx, client in enumerate(clients_to_try):
+                try:
+                    with client.stream_chat_completions(headers, upstream_payload) as stream_resp:
+                        content_type = stream_resp.headers.get("Content-Type", "text/event-stream")
+                        self.send_response(stream_resp.status)
+                        self._add_cors_headers()
+                        self.send_header("Content-Type", content_type)
+                        self.send_header("Cache-Control", "no-cache")
+                        self.send_header("Connection", "close")
+                        self.end_headers()
 
-                    try:
-                        for chunk in stream_resp.iter_chunks():
-                            self.wfile.write(chunk)
-                            self.wfile.flush()
-                    except (BrokenPipeError, ConnectionResetError, OSError):
-                        pass
-                    finally:
-                        self.close_connection = True
-            except UpstreamHttpError as exc:
-                self._send_json(exc.status, normalize_error(exc.status, exc.body))
+                        try:
+                            for chunk in stream_resp.iter_chunks():
+                                self.wfile.write(chunk)
+                                self.wfile.flush()
+                        except (BrokenPipeError, ConnectionResetError, OSError):
+                            pass
+                        finally:
+                            self.close_connection = True
+                        return
+                except (UpstreamUnavailable, UpstreamHttpError) as exc:
+                    is_unavailable = isinstance(exc, UpstreamUnavailable)
+                    is_5xx = isinstance(exc, UpstreamHttpError) and exc.status >= 500
+                    if (is_unavailable or is_5xx) and idx < len(clients_to_try) - 1:
+                        print(f"Primary upstream ({client.base_url}) failed: {exc}. Trying fallback ({clients_to_try[idx + 1].base_url})...")
+                        continue
+
+                    if isinstance(exc, UpstreamHttpError):
+                        self._send_json(exc.status, normalize_error(exc.status, exc.body))
+                        return
+                    self._send_json(
+                        502,
+                        {
+                            "error": {
+                                "message": f"Could not reach Kimi upstream: {exc.reason}",
+                                "type": "upstream_unavailable",
+                                "param": None,
+                                "code": "upstream_unavailable",
+                            }
+                        },
+                    )
+                    return
+            return
+
+        for idx, client in enumerate(clients_to_try):
+            try:
+                response = client.chat_completions(headers, upstream_payload)
+                self._send_raw(
+                    response.status,
+                    response.body,
+                    response.headers.get("Content-Type", "application/json"),
+                )
                 return
-            except UpstreamUnavailable as exc:
+            except (UpstreamUnavailable, UpstreamHttpError) as exc:
+                is_unavailable = isinstance(exc, UpstreamUnavailable)
+                is_5xx = isinstance(exc, UpstreamHttpError) and exc.status >= 500
+                if (is_unavailable or is_5xx) and idx < len(clients_to_try) - 1:
+                    print(f"Primary upstream ({client.base_url}) failed: {exc}. Trying fallback ({clients_to_try[idx + 1].base_url})...")
+                    continue
+
+                if isinstance(exc, UpstreamHttpError):
+                    self._send_json(exc.status, normalize_error(exc.status, exc.body))
+                    return
                 self._send_json(
                     502,
                     {
@@ -101,32 +144,6 @@ class KimiBridgeHandler(BaseHTTPRequestHandler):
                     },
                 )
                 return
-            return
-
-        try:
-            response = client.chat_completions(headers, upstream_payload)
-        except UpstreamHttpError as exc:
-            self._send_json(exc.status, normalize_error(exc.status, exc.body))
-            return
-        except UpstreamUnavailable as exc:
-            self._send_json(
-                502,
-                {
-                    "error": {
-                        "message": f"Could not reach Kimi upstream: {exc.reason}",
-                        "type": "upstream_unavailable",
-                        "param": None,
-                        "code": "upstream_unavailable",
-                    }
-                },
-            )
-            return
-
-        self._send_raw(
-            response.status,
-            response.body,
-            response.headers.get("Content-Type", "application/json"),
-        )
 
     def _read_json(self) -> dict[str, Any]:
         length = int(self.headers.get("Content-Length", "0"))
