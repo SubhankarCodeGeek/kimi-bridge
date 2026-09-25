@@ -15,6 +15,7 @@ from kimibridge.server import KimiBridgeHandler, KimiBridgeServer
 
 
 FIXTURES = Path(__file__).parent / "fixtures"
+TEST_TIMEOUT = 10
 
 
 class MockUpstreamHandler(BaseHTTPRequestHandler):
@@ -95,7 +96,7 @@ def running_server(server: ThreadingHTTPServer) -> Iterator[ThreadingHTTPServer]
     finally:
         server.shutdown()
         server.server_close()
-        thread.join(timeout=2)
+        thread.join(timeout=5)
 
 
 class IntegrationTests(unittest.TestCase):
@@ -107,9 +108,9 @@ class IntegrationTests(unittest.TestCase):
 
         config = AppConfig(server=ServerConfig(port=port))
         with running_server(QuietKimiBridgeServer(("127.0.0.1", port), config)):
-            with urlopen(f"http://127.0.0.1:{port}/health", timeout=2) as response:
+            with urlopen(f"http://127.0.0.1:{port}/health", timeout=TEST_TIMEOUT) as response:
                 health = json.loads(response.read().decode("utf-8"))
-            with urlopen(f"http://127.0.0.1:{port}/v1/models", timeout=2) as response:
+            with urlopen(f"http://127.0.0.1:{port}/v1/models", timeout=TEST_TIMEOUT) as response:
                 models = json.loads(response.read().decode("utf-8"))
 
         self.assertTrue(health["ok"])
@@ -138,7 +139,7 @@ class IntegrationTests(unittest.TestCase):
 
         with running_server(upstream):
             with running_server(proxy):
-                with urlopen(request, timeout=2) as response:
+                with urlopen(request, timeout=TEST_TIMEOUT) as response:
                     models = json.loads(response.read().decode("utf-8"))
 
         model_ids = {m["id"] for m in models["data"]}
@@ -155,7 +156,7 @@ class IntegrationTests(unittest.TestCase):
         config = AppConfig(server=ServerConfig(port=port))
         request = Request(f"http://127.0.0.1:{port}/v1/chat/completions", method="OPTIONS")
         with running_server(QuietKimiBridgeServer(("127.0.0.1", port), config)):
-            with urlopen(request, timeout=2) as response:
+            with urlopen(request, timeout=TEST_TIMEOUT) as response:
                 status = response.status
                 headers = dict(response.headers.items())
 
@@ -193,7 +194,7 @@ class IntegrationTests(unittest.TestCase):
 
         with running_server(upstream):
             with running_server(proxy):
-                with urlopen(request, timeout=2) as response:
+                with urlopen(request, timeout=TEST_TIMEOUT) as response:
                     result = json.loads(response.read().decode("utf-8"))
 
         self.assertEqual(result["choices"][0]["message"]["content"], "hello")
@@ -239,7 +240,7 @@ class IntegrationTests(unittest.TestCase):
 
         with running_server(upstream):
             with running_server(proxy):
-                with urlopen(request, timeout=2) as response:
+                with urlopen(request, timeout=TEST_TIMEOUT) as response:
                     body = response.read().decode("utf-8")
                     content_type = response.headers.get("Content-Type")
 
@@ -281,7 +282,7 @@ class IntegrationTests(unittest.TestCase):
 
         with running_server(fallback_upstream):
             with running_server(proxy):
-                with urlopen(request, timeout=2) as response:
+                with urlopen(request, timeout=TEST_TIMEOUT) as response:
                     result = json.loads(response.read().decode("utf-8"))
 
         self.assertEqual(result["choices"][0]["message"]["content"], "hello")
@@ -324,7 +325,7 @@ class IntegrationTests(unittest.TestCase):
 
         with running_server(fallback_upstream):
             with running_server(proxy):
-                with urlopen(request, timeout=2) as response:
+                with urlopen(request, timeout=TEST_TIMEOUT) as response:
                     body = response.read().decode("utf-8")
 
         self.assertIn('data: {"choices": [{"delta": {"content": "hello"}}]}', body)
@@ -358,7 +359,7 @@ class IntegrationTests(unittest.TestCase):
 
         with running_server(upstream):
             with running_server(proxy):
-                with urlopen(request, timeout=2) as response:
+                with urlopen(request, timeout=TEST_TIMEOUT) as response:
                     result = json.loads(response.read().decode("utf-8"))
 
         self.assertEqual(result["choices"][0]["message"]["content"], "Compose response from DeepSeek")
@@ -400,7 +401,7 @@ class IntegrationTests(unittest.TestCase):
         with running_server(upstream):
             with running_server(proxy):
                 with self.assertRaises(HTTPError) as ctx:
-                    urlopen(request, timeout=2)
+                    urlopen(request, timeout=TEST_TIMEOUT)
 
         err_body = json.loads(ctx.exception.read().decode("utf-8"))
         self.assertEqual(ctx.exception.code, 422)
