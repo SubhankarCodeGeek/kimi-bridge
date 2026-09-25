@@ -60,7 +60,7 @@ def build_parser() -> argparse.ArgumentParser:
     set_config = config_subparsers.add_parser("set", help="Set a config value.")
     set_config.add_argument(
         "key",
-        choices=["base-url", "compatibility-mode", "fallback-base-url", "host", "port"],
+        choices=["base-url", "compatibility-mode", "fallback-base-url", "host", "port", "provider"],
     )
     set_config.add_argument("value")
     return parser
@@ -143,6 +143,7 @@ def doctor() -> int:
     print(f"Version: {__version__}")
     print(f"Config path: {default_config_path()}")
     print(f"Configured endpoint: {endpoint}")
+    print(f"Provider: {config.provider}")
     print(f"Compatibility mode: {config.compatibility.mode}")
     print(f"Kimi base URL: {config.kimi.base_url}")
     print(f"Kimi fallback base URL: {config.kimi.fallback_base_url or 'None'}")
@@ -251,6 +252,14 @@ def set_config_value(key: str, value: str) -> int:
             print(f"Compatibility mode must be one of: {', '.join(sorted(VALID_MODES))}")
             return 2
         config = replace(config, compatibility=CompatibilityConfig(mode=value))
+
+    elif key == "provider":
+        valid_providers = {"kimi", "moonshot", "deepseek", "openai", "generic", "auto", "all"}
+        val_clean = value.strip().lower()
+        if val_clean not in valid_providers:
+            print(f"Provider must be one of: {', '.join(sorted(valid_providers))}")
+            return 2
+        config = replace(config, provider=val_clean)
 
     else:
         print(f"Unknown config key: {key}")

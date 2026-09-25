@@ -26,6 +26,27 @@ class ErrorTests(unittest.TestCase):
         self.assertEqual(result["error"]["message"], "Upstream error")
         self.assertEqual(result["error"]["code"], "upstream_http_500")
 
+    def test_normalizes_deepseek_422_detail_error(self) -> None:
+        body = (
+            b'{"detail":"Failed to deserialize the JSON body into the target type: '
+            b'messages[0].role: unknown variant developer, expected one of system, user, assistant, tool, latest_reminder"}'
+        )
+        result = normalize_error(422, body)
+
+        self.assertEqual(result["error"]["type"], "invalid_request_error")
+        self.assertEqual(result["error"]["code"], "invalid_parameters")
+        self.assertIn("unknown variant developer", result["error"]["message"])
+
+    def test_normalizes_pydantic_validation_error(self) -> None:
+        body = (
+            b'{"detail":[{"loc":["messages",0,"role"],"msg":"unknown variant developer","type":"value_error"}]}'
+        )
+        result = normalize_error(422, body)
+
+        self.assertEqual(result["error"]["type"], "invalid_request_error")
+        self.assertEqual(result["error"]["code"], "invalid_parameters")
+        self.assertIn("messages.0.role: unknown variant developer", result["error"]["message"])
+
 
 if __name__ == "__main__":
     unittest.main()

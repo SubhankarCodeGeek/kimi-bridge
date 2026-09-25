@@ -1,6 +1,6 @@
-# Installation
+# Installation & Updates
 
-## macOS And Linux
+## Quick Install (macOS & Linux)
 
 From a local checkout:
 
@@ -9,21 +9,14 @@ From a local checkout:
 ```
 
 The installer:
+- Copies application files to `~/.kimibridge/app`
+- Preserves existing configuration in `~/.kimibridge/config.json`
+- Tests and configures the port (defaults to `5001`, falls back cleanly if busy)
+- Registers and starts the background user service (`launchd` on macOS, `systemd --user` on Linux)
 
-- copies the source tree to `~/.kimibridge/app`
-- checks the configured port
-- chooses a fallback port when needed
-- saves the selected port to `~/.kimibridge/config.json`
-- installs a user-level background service
+---
 
-Service backend:
-
-```text
-macOS: launchd
-Linux: systemd --user
-```
-
-## Windows
+## Quick Install (Windows)
 
 From PowerShell in a local checkout:
 
@@ -31,11 +24,34 @@ From PowerShell in a local checkout:
 .\installers\install.ps1
 ```
 
-The installer registers a user-level scheduled task named:
+The installer registers and starts a background scheduled task named `KimiBridge`.
 
-```text
-KimiBridge
+---
+
+## Updating / Upgrading KimiBridge
+
+Upgrades are designed to be zero-downtime and non-destructive for existing settings:
+
+1. Pull the newest version or checkout the release tag:
+   ```bash
+   git pull origin main
+   ```
+2. Re-run the installer script:
+   ```bash
+   # Linux / macOS
+   ./installers/install.sh
+
+   # Windows
+   .\installers\install.ps1
+   ```
+The installer automatically replaces application files in `~/.kimibridge/app`, preserves your existing `config.json` (keeping your ports and providers), and restarts the background service with the new build.
+
+Verify the running version:
+```bash
+python3 -m kimibridge.cli doctor
 ```
+
+---
 
 ## Standalone Native Binary Builds
 
@@ -55,6 +71,8 @@ The compiled binaries will be output to `dist/` alongside `SHA256SUMS.txt`.
 
 Installers (`install.sh` and `install.ps1`) automatically detect prebuilt standalone binaries in `dist/` and install them directly without requiring a Python runtime.
 
+---
+
 ## Uninstall
 
 macOS/Linux:
@@ -69,7 +87,9 @@ Windows:
 .\installers\uninstall.ps1
 ```
 
-The uninstallers remove app files and service registrations. User config is left in place.
+The uninstallers remove app files and service registrations. User config in `~/.kimibridge/config.json` is left in place.
+
+---
 
 ## Service Commands
 
@@ -80,7 +100,6 @@ python3 -m kimibridge.cli status
 python3 -m kimibridge.cli stop
 python3 -m kimibridge.cli restart
 python3 -m kimibridge.cli logs
+python3 -m kimibridge.cli doctor
 python3 -m kimibridge.cli uninstall
 ```
-
-On Windows, `logs` is not implemented yet; use Task Scheduler history during this phase.

@@ -52,6 +52,38 @@ class CliTests(unittest.TestCase):
         self.assertEqual(result, 0)
         run_server_mock.assert_not_called()
 
+    def test_set_fallback_base_url_saves_config(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "config.json"
+            with patch("kimibridge.config.default_config_path", return_value=path):
+                with redirect_stdout(StringIO()):
+                    result = cli.set_config_value("fallback-base-url", "https://api.moonshot.ai")
+                loaded = load_config(path)
+
+            self.assertEqual(result, 0)
+            self.assertEqual(loaded.kimi.fallback_base_url, "https://api.moonshot.ai")
+
+    def test_set_provider_saves_config(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "config.json"
+            with patch("kimibridge.config.default_config_path", return_value=path):
+                with redirect_stdout(StringIO()):
+                    result = cli.set_config_value("provider", "deepseek")
+                loaded = load_config(path)
+
+            self.assertEqual(result, 0)
+            self.assertEqual(loaded.provider, "deepseek")
+
+    def test_set_provider_rejects_invalid_provider(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "config.json"
+            with patch("kimibridge.config.default_config_path", return_value=path):
+                with redirect_stdout(StringIO()):
+                    result = cli.set_config_value("provider", "invalid_provider_xyz")
+
+            self.assertEqual(result, 2)
+            self.assertFalse(path.exists())
+
 
 if __name__ == "__main__":
     unittest.main()

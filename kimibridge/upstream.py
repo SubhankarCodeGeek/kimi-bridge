@@ -60,6 +60,31 @@ class KimiUpstreamClient:
     ) -> Generator[UpstreamStreamResponse, None, None]:  # type: ignore[type-arg]
         return self.stream_post_json("/v1/chat/completions", headers, payload)  # type: ignore[return-value]
 
+    def list_models(self, headers: dict[str, str]) -> UpstreamResponse:
+        return self.get_json("/v1/models", headers)
+
+    def get_json(
+        self,
+        path: str,
+        headers: dict[str, str],
+    ) -> UpstreamResponse:
+        request = Request(
+            f"{self.base_url}{path}",
+            headers=headers,
+            method="GET",
+        )
+        try:
+            with urlopen(request, timeout=self.timeout) as response:
+                return UpstreamResponse(
+                    body=response.read(),
+                    status=response.status,
+                    headers=dict(response.headers.items()),
+                )
+        except HTTPError as exc:
+            raise UpstreamHttpError(exc.code, exc.read()) from exc
+        except URLError as exc:
+            raise UpstreamUnavailable(exc.reason) from exc
+
     def post_json(
         self,
         path: str,

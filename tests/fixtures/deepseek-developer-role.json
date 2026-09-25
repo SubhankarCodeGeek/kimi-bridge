@@ -1,0 +1,13 @@
+{
+  "model": "deepseek-chat",
+  "messages": [
+    {
+      "role": "developer",
+      "content": "You are an expert Android and Kotlin engineer."
+    },
+    {
+      "role": "user",
+      "content": "How do I implement a custom View in Compose?"
+    }
+  ]
+}

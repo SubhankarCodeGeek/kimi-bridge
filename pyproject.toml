@@ -1,7 +1,7 @@
 [project]
 name = "kimibridge"
-version = "0.1.0"
-description = "Local OpenAI-compatible compatibility gateway for Kimi/Moonshot."
+version = "0.2.0"
+description = "Local OpenAI-compatible compatibility gateway for Kimi/Moonshot, DeepSeek, and modern agentic tools."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }

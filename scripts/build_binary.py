@@ -68,6 +68,8 @@ def build_pyinstaller(target_stem: str, target_name: str) -> Path:
         str(work_dir),
         "--specpath",
         str(spec_dir),
+        "--collect-all",
+        "kimibridge",
         str(REPO_ROOT / "kimibridge" / "cli.py"),
     ]
     subprocess.run(cmd, check=True)

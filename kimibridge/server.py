@@ -38,7 +38,34 @@ class KimiBridgeHandler(BaseHTTPRequestHandler):
             return
 
         if path == "/v1/models":
-            self._send_json(200, normalized_models())
+            config: AppConfig = getattr(self.server, "config", AppConfig())
+            auth_header = self.headers.get("Authorization")
+            if auth_header:
+                headers = self._forward_headers()
+                clients_to_try = [KimiUpstreamClient(config.kimi.base_url)]
+                if config.kimi.fallback_base_url and config.kimi.fallback_base_url.rstrip("/") != config.kimi.base_url.rstrip("/"):
+                    clients_to_try.append(KimiUpstreamClient(config.kimi.fallback_base_url))
+
+                for client in clients_to_try:
+                    try:
+                        upstream_resp = client.list_models(headers)
+                        if upstream_resp.status == 200:
+                            upstream_data = json.loads(upstream_resp.body.decode("utf-8"))
+                            if isinstance(upstream_data, dict) and "data" in upstream_data and isinstance(upstream_data["data"], list):
+                                upstream_ids = {
+                                    m["id"] for m in upstream_data["data"] if isinstance(m, dict) and "id" in m
+                                }
+                                default_models_data = normalized_models(config.provider).get("data", [])
+                                merged = list(upstream_data["data"])
+                                for m in default_models_data:
+                                    if isinstance(m, dict) and m.get("id") not in upstream_ids:
+                                        merged.append(m)
+                                self._send_json(200, {"object": "list", "data": merged})
+                                return
+                    except Exception:
+                        pass
+
+            self._send_json(200, normalized_models(config.provider))
             return
 
         self._send_json(404, {"error": {"message": "Not found"}})
@@ -57,13 +84,18 @@ class KimiBridgeHandler(BaseHTTPRequestHandler):
             self._send_json(400, {"error": {"message": str(exc)}})
             return
 
+        headers = self._forward_headers()
         try:
-            upstream_payload = normalize_request(payload, config.compatibility.mode)
+            upstream_payload = normalize_request(
+                payload,
+                mode=config.compatibility.mode,
+                provider=config.provider,
+                base_url=config.kimi.base_url,
+                headers=headers,
+            )
         except ValueError as exc:
             self._send_json(500, {"error": {"message": str(exc)}})
             return
-
-        headers = self._forward_headers()
         clients_to_try = [KimiUpstreamClient(config.kimi.base_url)]
         if config.kimi.fallback_base_url and config.kimi.fallback_base_url.rstrip("/") != config.kimi.base_url.rstrip("/"):
             clients_to_try.append(KimiUpstreamClient(config.kimi.fallback_base_url))

@@ -86,3 +86,14 @@ Status: complete.
 - Maintain release notes and troubleshooting docs.
 
 Status: complete.
+
+## Phase 11: Multi-Provider Compatibility Engine
+
+- Abstract compatibility rules into reusable `ProviderProfile` models.
+- Support auto-detection of providers via request headers (`X-Bridge-Provider`), model prefix (`deepseek-*`, `kimi-*`, `gpt-*`), or upstream base URL.
+- Support DeepSeek Chat Completions compatibility (`developer` ➔ `system` normalization, HTTP 422 error normalization).
+- Add DeepSeek test fixtures and end-to-end integration tests.
+- Support OpenAI passthrough profile preserving `developer` role.
+- Add CLI provider selection (`kimibridge config set provider <name>`).
+
+Status: complete.

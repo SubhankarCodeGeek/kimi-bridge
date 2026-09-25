@@ -13,7 +13,8 @@
 ## ✨ Features
 
 - ⚡ **Zero-Latency SSE Streaming**: Supports real-time streaming (`stream: true`) line-by-line forwarding.
-- 🛠️ **Role Normalization**: Maps unsupported OpenAI `developer` role messages to `system` role.
+- 🧩 **Provider-Aware Compatibility**: Adapts requests to target provider profiles (e.g. **Kimi / Moonshot**, **DeepSeek**, **OpenAI**).
+- 🛠️ **Role Normalization**: Maps unsupported OpenAI `developer` role messages to `system` role when targeting strict providers like Kimi or DeepSeek.
 - 🧹 **Payload Cleaning**: Filters out unsupported parameters (`parallel_tool_calls`, `store`, `metadata`).
 - 🌐 **CORS Support**: Full preflight (`OPTIONS`) support for web tools and browser extensions.
 - 🔌 **Graceful Port Management**: Automatic fallback port selection if port `5001` is occupied (`--auto-port`).
@@ -138,6 +139,8 @@ python3 -m kimibridge.cli restart
 # Configuration management
 python3 -m kimibridge.cli config show
 python3 -m kimibridge.cli config set port 5002
+python3 -m kimibridge.cli config set provider deepseek
+python3 -m kimibridge.cli config set base-url https://api.deepseek.com
 python3 -m kimibridge.cli config set compatibility-mode compatible
 ```
 
@@ -148,25 +151,36 @@ For full details, see the [User Guide](docs/user_guide.md).
 ## 🏗️ Architecture
 
 ```text
-OpenAI-compatible Client (Android Studio, Cursor, Aider, cURL)
-                         │
-                         ▼
-          KimiBridge Proxy (127.0.0.1:5001)
-                         │
-                         ▼
-        Compatibility Engine (Roles, Parameters)
-                         │
-                         ▼
-         Kimi / Moonshot API (api.moonshot.ai)
+                  OpenAI-Compatible Client
+             (Android Studio, Cursor, Aider, etc.)
+                             │
+                             ▼
+                    ┌──────────────────┐
+                    │    KimiBridge    │
+                    │   HTTP Gateway   │
+                    └────────┬─────────┘
+                             │
+                             ▼
+                    ┌──────────────────┐
+                    │  Compatibility   │
+                    │      Engine      │
+                    └────────┬─────────┘
+                             │
+              ┌──────────────┼──────────────┐
+              ▼              ▼              ▼
+         Kimi Profile   DeepSeek Prof.  OpenAI Prof.
+              │              │              │
+              ▼              ▼              ▼
+       api.moonshot.ai api.deepseek.com api.openai.com
 ```
 
 ---
 
 ## ⚙️ Compatibility Modes
 
-- **`compatible`** *(default)*: Normalizes `developer` role ➔ `system` and purges unsupported parameters.
-- **`strict`**: Leaves request parameters intact while maintaining mode validation.
-- **`passthrough`**: Forwards raw HTTP requests directly to Moonshot upstream.
+- **`compatible`** *(default)*: Normalizes `developer` role ➔ `system` for strict providers (Kimi, DeepSeek) and purges unsupported parameters (`store`, `metadata`, `parallel_tool_calls`).
+- **`strict`**: Leaves parameters unchanged while normalizing roles required to prevent deserialization errors.
+- **`passthrough`**: Forwards raw HTTP requests directly to upstream without modifications.
 
 ---
 

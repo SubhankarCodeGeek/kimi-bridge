@@ -1,33 +1,66 @@
 # Architecture
 
 ```text
-OpenAI-compatible client
-          |
-          v
-   KimiBridge HTTP server
-          |
-          v
- Compatibility pipeline
-          |
-          v
-   Kimi/Moonshot upstream
+                  OpenAI-Compatible Client
+             (Android Studio, Cursor, Aider, etc.)
+                             │
+                             ▼
+                    ┌──────────────────┐
+                    │    KimiBridge    │
+                    │   HTTP Gateway   │
+                    └────────┬─────────┘
+                             │
+                             ▼
+                    ┌──────────────────┐
+                    │  Compatibility   │
+                    │      Engine      │
+                    └────────┬─────────┘
+                             │
+              ┌──────────────┼──────────────┐
+              ▼              ▼              ▼
+         Kimi Profile   DeepSeek Prof.  OpenAI Prof.
+              │              │              │
+              ▼              ▼              ▼
+       api.moonshot.ai api.deepseek.com api.openai.com
 ```
 
-The proxy core is platform-neutral. Installers and service managers are platform-specific wrappers around the same local gateway.
+The gateway is platform-neutral and runs locally (default: `127.0.0.1:5001/v1`). Native service managers (`systemd` on Linux, `launchd` on macOS, and `Task Scheduler` on Windows) run the server as a background daemon.
 
-## Compatibility Pipeline
+---
+
+## Provider-Aware Compatibility Pipeline
+
+Agentic clients (like Android Studio AI Assistant) emit OpenAI-style schemas that utilize newer features—such as the `developer` message role, `store`, `metadata`, or `parallel_tool_calls` parameters. Many upstream providers advertise "OpenAI-compatible" endpoints, but strictly reject schema extensions with HTTP 422 or deserialization errors.
+
+KimiBridge implements a provider-aware normalization pipeline:
 
 ```text
-OpenAI-style request
-          |
-          v
-Role adapter
-          |
-          v
-Parameter adapter
-          |
-          v
-Kimi upstream request
+Request (OpenAI Schema)
+          │
+          ▼
+Parse & Inspect Payload
+          │
+          ▼
+Detect Provider Profile
+(by header, config, model prefix, or upstream URL)
+          │
+          ▼
+Role Adapter (e.g. developer ➔ system for Kimi & DeepSeek; preserve for OpenAI)
+          │
+          ▼
+Parameter Adapter (strip unsupported keys like parallel_tool_calls, store, metadata)
+          │
+          ▼
+Forward to Upstream Provider
+          │
+          ▼
+Stream or Return Normalized Response
 ```
 
-The default mode is `compatible`, which applies known safe normalizations. `strict` keeps unsupported parameters visible while still rejecting unknown compatibility modes. `passthrough` leaves request shape as close to the client payload as possible.
+---
+
+## Compatibility Modes
+
+- **`compatible`** *(default)*: Detects the target provider profile, maps unsupported roles (e.g. `developer` ➔ `system` for Kimi and DeepSeek), and strips unsupported parameters.
+- **`strict`**: Applies role normalizations required to avoid upstream deserialization failures while leaving parameters unmodified.
+- **`passthrough`**: Forwards raw HTTP requests directly to the upstream without modifying roles or parameters.

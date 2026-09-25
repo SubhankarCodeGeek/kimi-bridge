@@ -28,5 +28,5 @@ Run `kimibridge doctor` and paste the output here:
 
 **Environment (please complete the following information):**
  - OS: [e.g. Linux Ubuntu, macOS 14, Windows 11]
- - KimiBridge Version: [e.g. 0.1.0]
+ - KimiBridge Version: [e.g. 0.2.0]
  - Client Tool: [e.g. Android Studio, Cursor, Aider]

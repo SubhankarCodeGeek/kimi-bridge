@@ -9,6 +9,7 @@ from typing import Any
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 5001
 DEFAULT_BASE_URL = "https://api.moonshot.ai"
+DEFAULT_PROVIDER = "kimi"
 
 
 @dataclass(frozen=True)
@@ -33,6 +34,7 @@ class AppConfig:
     server: ServerConfig = ServerConfig()
     kimi: KimiConfig = KimiConfig()
     compatibility: CompatibilityConfig = CompatibilityConfig()
+    provider: str = DEFAULT_PROVIDER
 
 
 def default_config_path() -> Path:
@@ -51,6 +53,7 @@ def load_config(path: Path | None = None) -> AppConfig:
     server = data.get("server", {})
     kimi = data.get("kimi", {})
     compatibility = data.get("compatibility", {})
+    provider = str(data.get("provider", DEFAULT_PROVIDER))
 
     fallback_raw = kimi.get("fallback_base_url")
     fallback_base_url = str(fallback_raw) if fallback_raw is not None else None
@@ -67,6 +70,7 @@ def load_config(path: Path | None = None) -> AppConfig:
         compatibility=CompatibilityConfig(
             mode=str(compatibility.get("mode", "compatible"))
         ),
+        provider=provider,
     )
 
 
@@ -83,6 +87,7 @@ def config_to_dict(config: AppConfig) -> dict[str, Any]:
         "compatibility": {
             "mode": config.compatibility.mode,
         },
+        "provider": config.provider,
     }
 
 
