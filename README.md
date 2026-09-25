@@ -269,6 +269,7 @@ Outputs compiled binaries to `dist/` (e.g. `kimibridge-linux-x86_64`, `kimibridg
 
 - [User Guide](docs/user_guide.md) - Complete client configuration guides.
 - [Installation Guide](docs/installation.md) - Detailed installation instructions.
+- [Contributing Guide](CONTRIBUTING.md) - Developer prerequisites, architecture tour, and testing.
 - [Compatibility Matrix](docs/compatibility.md) - Tested tools and feature support.
 - [Roadmap](docs/roadmap.md) - Project development phases.
 - [Security Policy](SECURITY.md) - Privacy & credential safety policy.
