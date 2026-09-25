@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.1
+
+- Add dedicated `kimibridge setup <provider>` and `kimibridge use <provider>` commands for 1-step switching (e.g. `setup deepseek`, `setup kimi`, `setup all`).
+- Automatically synchronize provider and default upstream base URL when setting either `provider` or `base-url`.
+- Automatically restart running background services on configuration changes so updates take effect immediately.
+- Enable live dynamic configuration reloading in `KimiBridgeServer`.
+- Prioritize detected provider from base URL and requested model in `/v1/models` and `/v1/chat/completions`.
+- Order DeepSeek models first in `/v1/models` when connected to DeepSeek or when provider is `all`.
+- Strip trailing `/v1` from upstream base URLs to prevent `/v1/v1` path concatenation issues.
+- Support `--provider` and `--base-url` flags as well as `KIMIBRIDGE_PROVIDER` in `install.sh` and `install.ps1`.
+
 ## 0.2.0
 
 - Evolve KimiBridge from single-provider proxy to a **Provider-Aware Compatibility Engine**.

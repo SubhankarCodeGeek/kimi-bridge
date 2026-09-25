@@ -134,6 +134,65 @@ main() {
   local python_bin=""
   local exec_cmd=""
   local binary_candidate
+  local provider="${KIMIBRIDGE_PROVIDER:-}"
+  local base_url="${KIMIBRIDGE_BASE_URL:-}"
+
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --deepseek)
+        provider="deepseek"
+        shift
+        ;;
+      --kimi)
+        provider="kimi"
+        shift
+        ;;
+      --all)
+        provider="all"
+        shift
+        ;;
+      --provider)
+        provider="$2"
+        shift 2
+        ;;
+      --base-url)
+        base_url="$2"
+        shift 2
+        ;;
+      *)
+        shift
+        ;;
+    esac
+  done
+
+  if [ -z "$provider" ]; then
+    if [ -t 0 ] && [ -t 1 ]; then
+      log ""
+      log "Select your target AI provider for Android Studio / LLM clients:"
+      log "  1) DeepSeek (https://api.deepseek.com) [Recommended]"
+      log "  2) Kimi / Moonshot AI (https://api.moonshot.ai)"
+      log "  3) All Providers (exposes both DeepSeek and Kimi models)"
+      read -r -p "Enter choice [1-3, default: 1]: " user_choice || user_choice=""
+      case "${user_choice:-1}" in
+        1|deepseek|DeepSeek)
+          provider="deepseek"
+          ;;
+        2|kimi|Kimi|moonshot|Moonshot)
+          provider="kimi"
+          ;;
+        3|all|All)
+          provider="all"
+          ;;
+        *)
+          provider="deepseek"
+          ;;
+      esac
+    else
+      if [ ! -f "$CONFIG_DIR/config.json" ]; then
+        provider="deepseek"
+      fi
+    fi
+  fi
 
   os="$(detect_os)"
   arch="$(detect_arch)"
@@ -165,13 +224,27 @@ main() {
     linux) install_linux_service "$exec_cmd" ;;
   esac
 
+  if [ -n "$provider" ]; then
+    log ""
+    log "Configuring provider: $provider"
+    if [ -n "$base_url" ]; then
+      eval "$exec_cmd setup \"$provider\" --base-url \"$base_url\""
+    else
+      eval "$exec_cmd setup \"$provider\""
+    fi
+  else
+    log ""
+    eval "$exec_cmd config show"
+  fi
+
   log ""
-  log "KimiBridge is installed."
-  eval "$exec_cmd config show"
-  log ""
-  log "Use the endpoint above in Android Studio as an OpenAI-compatible provider."
-  log "Run diagnostics with:"
-  log "  $exec_cmd doctor"
+  log "============================================================"
+  log "  KimiBridge is ready for Android Studio!"
+  log "============================================================"
+  log "  Base URL:  http://127.0.0.1:5001/v1"
+  log "  Action:    In Android Studio, enter your API key and"
+  log "             click Refresh to populate the model dropdown."
+  log "============================================================"
 }
 
 main "$@"

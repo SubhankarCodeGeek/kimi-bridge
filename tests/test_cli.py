@@ -73,6 +73,7 @@ class CliTests(unittest.TestCase):
 
             self.assertEqual(result, 0)
             self.assertEqual(loaded.provider, "deepseek")
+            self.assertEqual(loaded.kimi.base_url, "https://api.deepseek.com")
 
     def test_set_provider_rejects_invalid_provider(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -83,6 +84,75 @@ class CliTests(unittest.TestCase):
 
             self.assertEqual(result, 2)
             self.assertFalse(path.exists())
+
+    def test_set_base_url_auto_syncs_provider_to_deepseek(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "config.json"
+            with patch("kimibridge.config.default_config_path", return_value=path):
+                with redirect_stdout(StringIO()):
+                    result = cli.set_config_value("base-url", "https://api.deepseek.com")
+                loaded = load_config(path)
+
+            self.assertEqual(result, 0)
+            self.assertEqual(loaded.provider, "deepseek")
+            self.assertEqual(loaded.kimi.base_url, "https://api.deepseek.com")
+
+    def test_setup_provider_deepseek(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "config.json"
+            args = cli.build_parser().parse_args(["setup", "deepseek", "--no-restart"])
+            with patch("kimibridge.config.default_config_path", return_value=path):
+                with patch("kimibridge.cli.default_config_path", return_value=path):
+                    with redirect_stdout(StringIO()):
+                        result = cli.setup_provider(args)
+                    loaded = load_config(path)
+
+            self.assertEqual(result, 0)
+            self.assertEqual(loaded.provider, "deepseek")
+            self.assertEqual(loaded.kimi.base_url, "https://api.deepseek.com")
+
+    def test_setup_provider_kimi(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "config.json"
+            args = cli.build_parser().parse_args(["setup", "kimi", "--no-restart"])
+            with patch("kimibridge.config.default_config_path", return_value=path):
+                with patch("kimibridge.cli.default_config_path", return_value=path):
+                    with redirect_stdout(StringIO()):
+                        result = cli.setup_provider(args)
+                    loaded = load_config(path)
+
+            self.assertEqual(result, 0)
+            self.assertEqual(loaded.provider, "kimi")
+            self.assertEqual(loaded.kimi.base_url, "https://api.moonshot.ai")
+
+    def test_setup_provider_with_custom_base_url(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "config.json"
+            args = cli.build_parser().parse_args(
+                ["setup", "deepseek", "--base-url", "https://custom.deepseek.proxy/v1", "--no-restart"]
+            )
+            with patch("kimibridge.config.default_config_path", return_value=path):
+                with patch("kimibridge.cli.default_config_path", return_value=path):
+                    with redirect_stdout(StringIO()):
+                        result = cli.setup_provider(args)
+                    loaded = load_config(path)
+
+            self.assertEqual(result, 0)
+            self.assertEqual(loaded.provider, "deepseek")
+            self.assertEqual(loaded.kimi.base_url, "https://custom.deepseek.proxy/v1")
+
+    def test_use_provider_alias(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "config.json"
+            args = cli.build_parser().parse_args(["use", "deepseek", "--no-restart"])
+            with patch("kimibridge.config.default_config_path", return_value=path):
+                with patch("kimibridge.cli.default_config_path", return_value=path):
+                    with redirect_stdout(StringIO()):
+                        result = cli.main(["use", "deepseek", "--no-restart"])
+                    loaded = load_config(path)
+
+            self.assertEqual(result, 0)
+            self.assertEqual(loaded.provider, "deepseek")
 
 
 if __name__ == "__main__":

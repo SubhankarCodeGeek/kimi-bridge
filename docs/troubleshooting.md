@@ -59,16 +59,18 @@ Route requests through KimiBridge at `http://127.0.0.1:5001/v1`. KimiBridge inte
 
 If Android Studio displays models from another provider (e.g. `kimi-k3` instead of DeepSeek models):
 
-1. Confirm your configured provider in KimiBridge:
+1. Switch your provider with a single command:
    ```bash
-   python3 -m kimibridge.cli config set provider deepseek
-   python3 -m kimibridge.cli config set base-url https://api.deepseek.com
+   python3 -m kimibridge.cli setup deepseek
    ```
-2. Restart the background service to reload the updated configuration:
-   ```bash
-   python3 -m kimibridge.cli restart
-   ```
-3. In Android Studio, click **Refresh** on the models dropdown.
+   *(Or for Kimi: `python3 -m kimibridge.cli setup kimi`, or for all models: `python3 -m kimibridge.cli setup all`)*
+
+   This command automatically:
+   - Sets the target provider (`deepseek`)
+   - Configures the matching upstream base URL (`https://api.deepseek.com`)
+   - Restarts the background service to apply changes immediately
+
+2. In Android Studio, click **Refresh** on the models dropdown. DeepSeek models (`deepseek-chat`, `deepseek-v3-pro`, `deepseek-flash`, etc.) will appear.
 
 ---
 

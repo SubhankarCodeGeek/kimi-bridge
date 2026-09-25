@@ -42,6 +42,8 @@ jobs:
         run: |
           bash -n installers/install.sh
           bash -n installers/uninstall.sh
+          bash -n installers/install-deepseek.sh
+          bash -n installers/install-kimi.sh
 
   powershell:
     name: PowerShell syntax
@@ -60,3 +62,6 @@ jobs:
           $err2 = $null
           $null = [System.Management.Automation.Language.Parser]::ParseInput((Get-Content .\installers\uninstall.ps1 -Raw), [ref]$null, [ref]$err2)
           if ($err2.Count -gt 0) { throw $err2 }
+          $err3 = $null
+          $null = [System.Management.Automation.Language.Parser]::ParseInput((Get-Content .\installers\install-deepseek.ps1 -Raw), [ref]$null, [ref]$err3)
+          if ($err3.Count -gt 0) { throw $err3 }

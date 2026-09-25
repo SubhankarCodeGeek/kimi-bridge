@@ -105,25 +105,13 @@ def detect_provider(
     headers: dict[str, str] | None = None,
 ) -> ProviderProfile:
     """
-    Detect provider profile based on explicit headers, configuration, model name heuristic,
-    or upstream base URL heuristic.
+    Detect provider profile based on explicit headers, upstream base URL heuristic,
+    model name heuristic, or configuration.
     """
     if headers:
         for k, v in headers.items():
             if k.lower() in {"x-bridge-provider", "x-provider"}:
                 return get_provider_profile(v)
-
-    if configured_provider and configured_provider.lower() not in {"auto", "default"}:
-        return get_provider_profile(configured_provider)
-
-    if model:
-        m = model.lower()
-        if "deepseek" in m:
-            return DEEPSEEK_PROFILE
-        if "kimi" in m or "moonshot" in m:
-            return KIMI_PROFILE
-        if m.startswith("gpt-") or m.startswith("o1") or m.startswith("o3"):
-            return OPENAI_PROFILE
 
     if base_url:
         u = base_url.lower()
@@ -134,7 +122,16 @@ def detect_provider(
         if "openai.com" in u:
             return OPENAI_PROFILE
 
-    if configured_provider:
+    if model:
+        m = model.lower()
+        if "deepseek" in m:
+            return DEEPSEEK_PROFILE
+        if "kimi" in m or "moonshot" in m:
+            return KIMI_PROFILE
+        if m.startswith("gpt-") or m.startswith("o1") or m.startswith("o3"):
+            return OPENAI_PROFILE
+
+    if configured_provider and configured_provider.lower() not in {"auto", "default", "all"}:
         return get_provider_profile(configured_provider)
 
     return KIMI_PROFILE

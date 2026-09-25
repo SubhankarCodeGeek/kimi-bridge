@@ -52,6 +52,19 @@ class ModelTests(unittest.TestCase):
         self.assertIn("deepseek-chat", model_ids)
         self.assertIn("gpt-4o", model_ids)
 
+    def test_normalized_models_with_deepseek_base_url_infers_deepseek(self) -> None:
+        result = normalized_models(base_url="https://api.deepseek.com")
+        model_ids = {m["id"] for m in result["data"]}  # type: ignore[union-attr]
+
+        self.assertIn("deepseek-chat", model_ids)
+        self.assertIn("deepseek-v3-pro", model_ids)
+        self.assertNotIn("kimi-k3", model_ids)
+
+    def test_normalized_models_all_orders_deepseek_first_when_base_url_is_deepseek(self) -> None:
+        result = normalized_models(provider="all", base_url="https://api.deepseek.com")
+        models = result["data"]  # type: ignore[union-attr]
+        self.assertEqual(models[0]["id"], "deepseek-chat")
+
 
 if __name__ == "__main__":
     unittest.main()

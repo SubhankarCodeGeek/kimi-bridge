@@ -1,7 +1,39 @@
+param(
+    [string]$Provider = $env:KIMIBRIDGE_PROVIDER,
+    [string]$BaseUrl = $env:KIMIBRIDGE_BASE_URL,
+    [switch]$DeepSeek,
+    [switch]$Kimi,
+    [switch]$All
+)
+
 $ErrorActionPreference = "Stop"
 
-$InstallDir = if ($env:KIMIBRIDGE_INSTALL_DIR) { $env:KIMIBRIDGE_INSTALL_DIR } else { Join-Path $env:USERPROFILE ".kimibridge\app" }
+if ($DeepSeek) { $Provider = "deepseek" }
+if ($Kimi) { $Provider = "kimi" }
+if ($All) { $Provider = "all" }
+
 $ConfigDir = Join-Path $env:USERPROFILE ".kimibridge"
+if (-not $Provider) {
+    if ([Environment]::UserInteractive) {
+        Write-Host ""
+        Write-Host "Select your target AI provider for Android Studio / LLM clients:"
+        Write-Host "  1) DeepSeek (https://api.deepseek.com) [Recommended]"
+        Write-Host "  2) Kimi / Moonshot AI (https://api.moonshot.ai)"
+        Write-Host "  3) All Providers (exposes both DeepSeek and Kimi models)"
+        $choice = Read-Host "Enter choice [1-3, default: 1]"
+        switch ($choice) {
+            "2" { $Provider = "kimi" }
+            "3" { $Provider = "all" }
+            default { $Provider = "deepseek" }
+        }
+    } else {
+        if (-not (Test-Path (Join-Path $ConfigDir "config.json"))) {
+            $Provider = "deepseek"
+        }
+    }
+}
+
+$InstallDir = if ($env:KIMIBRIDGE_INSTALL_DIR) { $env:KIMIBRIDGE_INSTALL_DIR } else { Join-Path $env:USERPROFILE ".kimibridge\app" }
 $RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $TaskName = "KimiBridge"
 
@@ -75,6 +107,24 @@ $Task = New-ScheduledTask -Action $Action -Trigger $Trigger -Principal $Principa
 
 Register-ScheduledTask -TaskName $TaskName -InputObject $Task -Force | Out-Null
 Start-ScheduledTask -TaskName $TaskName
+
+if ($Provider) {
+    Write-Host ""
+    Write-Host "Configuring provider: $Provider"
+    if ($ExecPath -eq $PythonBin) {
+        if ($BaseUrl) {
+            & $PythonBin -m kimibridge.cli setup $Provider --base-url $BaseUrl
+        } else {
+            & $PythonBin -m kimibridge.cli setup $Provider
+        }
+    } else {
+        if ($BaseUrl) {
+            & $ExecPath setup $Provider --base-url $BaseUrl
+        } else {
+            & $ExecPath setup $Provider
+        }
+    }
+}
 
 Write-Host ""
 Write-Host "KimiBridge is installed."

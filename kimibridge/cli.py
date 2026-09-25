@@ -6,8 +6,10 @@ import json
 import sys
 
 from kimibridge import __version__
+from kimibridge.compatibility import normalized_models
 from kimibridge.compatibility.pipeline import VALID_MODES
 from kimibridge.config import (
+    DEFAULT_BASE_URL,
     CompatibilityConfig,
     KimiConfig,
     ServerConfig,
@@ -26,6 +28,16 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="kimibridge")
     parser.add_argument("--version", action="store_true", help="Print version and exit.")
     subparsers = parser.add_subparsers(dest="command")
+
+    setup = subparsers.add_parser("setup", help="Quick setup for a target provider (deepseek, kimi, all, openai).")
+    setup.add_argument("provider", choices=["deepseek", "kimi", "moonshot", "openai", "all"])
+    setup.add_argument("--base-url", help="Custom upstream base URL. Defaults to provider standard.")
+    setup.add_argument("--no-restart", action="store_true", help="Do not restart background service after setup.")
+
+    use = subparsers.add_parser("use", help="Alias for setup: switch target provider.")
+    use.add_argument("provider", choices=["deepseek", "kimi", "moonshot", "openai", "all"])
+    use.add_argument("--base-url", help="Custom upstream base URL. Defaults to provider standard.")
+    use.add_argument("--no-restart", action="store_true", help="Do not restart background service after setup.")
 
     start = subparsers.add_parser("start", help="Start the local proxy.")
     start.add_argument("--host", help="Host to bind. Defaults to config or 127.0.0.1.")
@@ -74,6 +86,9 @@ def main(argv: list[str] | None = None) -> int:
         print(__version__)
         return 0
 
+    if args.command in {"setup", "use"}:
+        return setup_provider(args)
+
     if args.command == "start":
         return start(args)
 
@@ -99,6 +114,62 @@ def main(argv: list[str] | None = None) -> int:
         return config_command(args)
 
     parser.print_help()
+    return 0
+
+
+def setup_provider(args: argparse.Namespace) -> int:
+    provider = args.provider.strip().lower()
+    if provider == "moonshot":
+        provider = "kimi"
+
+    config = load_config()
+
+    if getattr(args, "base_url", None):
+        base_url = args.base_url.strip()
+    elif provider == "deepseek":
+        base_url = "https://api.deepseek.com"
+    elif provider == "kimi":
+        base_url = "https://api.moonshot.ai"
+    elif provider == "openai":
+        base_url = "https://api.openai.com"
+    else:  # all
+        base_url = config.kimi.base_url
+
+    new_config = replace(
+        config,
+        provider=provider,
+        kimi=replace(config.kimi, base_url=base_url),
+    )
+    config_path = save_config(new_config)
+
+    endpoint = f"http://{new_config.server.host}:{new_config.server.port}/v1"
+    print(f"KimiBridge configured for provider: {provider.upper()}")
+    print(f"  Target Provider:   {provider}")
+    print(f"  Upstream Base URL: {base_url}")
+    print(f"  Proxy Endpoint:    {endpoint}")
+    print(f"  Saved to:          {config_path}")
+
+    models_resp = normalized_models(provider, base_url=base_url)
+    models_list = [m["id"] for m in models_resp.get("data", [])]
+    if models_list:
+        print(f"  Available Models:  {', '.join(models_list[:6])}" + ("..." if len(models_list) > 6 else ""))
+
+    if not getattr(args, "no_restart", False):
+        health = check_health(new_config.server.host, new_config.server.port)
+        if health.ok:
+            result = service_action("restart")
+            if result.ok:
+                print("  Background Service: Successfully restarted")
+            else:
+                print(f"  Background Service: {result.message}")
+        else:
+            print("  Background Service: Not currently running (run 'kimibridge start --auto-port' to start)")
+
+    print()
+    print("In Android Studio / Cursor / Aider:")
+    print(f"  1. Set Base URL: {endpoint}")
+    print(f"  2. Enter your {provider.capitalize()} API Key")
+    print("  3. Click Refresh: Models will load into the dropdown!")
     return 0
 
 
@@ -241,7 +312,20 @@ def set_config_value(key: str, value: str) -> int:
         config = replace(config, server=replace(config.server, host=value))
 
     elif key == "base-url":
-        config = replace(config, kimi=replace(config.kimi, base_url=value))
+        clean_url = value.strip()
+        new_provider = config.provider
+        if "deepseek.com" in clean_url.lower() and config.provider in {"kimi", "auto"}:
+            new_provider = "deepseek"
+        elif "moonshot.ai" in clean_url.lower() and config.provider == "deepseek":
+            new_provider = "kimi"
+        elif "openai.com" in clean_url.lower() and config.provider in {"kimi", "auto"}:
+            new_provider = "openai"
+
+        config = replace(
+            config,
+            provider=new_provider,
+            kimi=replace(config.kimi, base_url=clean_url),
+        )
 
     elif key == "fallback-base-url":
         fallback_val = value if value.strip().lower() != "none" and value.strip() != "" else None
@@ -259,7 +343,20 @@ def set_config_value(key: str, value: str) -> int:
         if val_clean not in valid_providers:
             print(f"Provider must be one of: {', '.join(sorted(valid_providers))}")
             return 2
-        config = replace(config, provider=val_clean)
+
+        new_base_url = config.kimi.base_url
+        if val_clean == "deepseek" and (config.kimi.base_url == DEFAULT_BASE_URL or "moonshot.ai" in config.kimi.base_url):
+            new_base_url = "https://api.deepseek.com"
+        elif val_clean in {"kimi", "moonshot"} and ("deepseek.com" in config.kimi.base_url):
+            new_base_url = DEFAULT_BASE_URL
+        elif val_clean == "openai" and (config.kimi.base_url == DEFAULT_BASE_URL or "moonshot.ai" in config.kimi.base_url):
+            new_base_url = "https://api.openai.com"
+
+        config = replace(
+            config,
+            provider=val_clean,
+            kimi=replace(config.kimi, base_url=new_base_url),
+        )
 
     else:
         print(f"Unknown config key: {key}")
@@ -267,6 +364,11 @@ def set_config_value(key: str, value: str) -> int:
 
     config_path = save_config(config)
     print(f"Saved config to {config_path}")
+    health = check_health(config.server.host, config.server.port)
+    if health.ok:
+        restart_res = service_action("restart")
+        if restart_res.ok:
+            print("Background service restarted to apply changes.")
     return 0
 
 

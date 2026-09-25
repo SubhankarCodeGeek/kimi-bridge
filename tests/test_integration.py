@@ -147,6 +147,46 @@ class IntegrationTests(unittest.TestCase):
         self.assertIn("kimi-k3", model_ids)
         self.assertIn("moonshot-v1-128k", model_ids)
 
+    def test_models_returns_deepseek_models_when_provider_is_deepseek(self) -> None:
+        try:
+            port = free_port()
+        except (PermissionError, OSError):
+            self.skipTest("Local sockets are not permitted in this environment.")
+
+        config = AppConfig(
+            server=ServerConfig(port=port),
+            provider="deepseek",
+            kimi=KimiConfig(base_url="https://api.deepseek.com"),
+        )
+        with running_server(QuietKimiBridgeServer(("127.0.0.1", port), config)):
+            with urlopen(f"http://127.0.0.1:{port}/v1/models", timeout=TEST_TIMEOUT) as response:
+                models = json.loads(response.read().decode("utf-8"))
+
+        model_ids = {m["id"] for m in models["data"]}
+        self.assertIn("deepseek-chat", model_ids)
+        self.assertIn("deepseek-v3-pro", model_ids)
+        self.assertNotIn("kimi-k3", model_ids)
+
+    def test_models_returns_deepseek_models_when_base_url_is_deepseek(self) -> None:
+        try:
+            port = free_port()
+        except (PermissionError, OSError):
+            self.skipTest("Local sockets are not permitted in this environment.")
+
+        config = AppConfig(
+            server=ServerConfig(port=port),
+            provider="kimi",
+            kimi=KimiConfig(base_url="https://api.deepseek.com/v1"),
+        )
+        with running_server(QuietKimiBridgeServer(("127.0.0.1", port), config)):
+            with urlopen(f"http://127.0.0.1:{port}/v1/models", timeout=TEST_TIMEOUT) as response:
+                models = json.loads(response.read().decode("utf-8"))
+
+        model_ids = {m["id"] for m in models["data"]}
+        self.assertIn("deepseek-chat", model_ids)
+        self.assertIn("deepseek-v3-pro", model_ids)
+        self.assertNotIn("kimi-k3", model_ids)
+
     def test_options_cors(self) -> None:
         try:
             port = free_port()

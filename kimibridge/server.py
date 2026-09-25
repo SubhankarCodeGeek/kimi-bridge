@@ -1,13 +1,19 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 from typing import Any
 from urllib.parse import urlparse
 
 from kimibridge import __version__
-from kimibridge.compatibility import normalize_error, normalize_request, normalized_models
-from kimibridge.config import AppConfig
+from kimibridge.compatibility import (
+    detect_provider,
+    normalize_error,
+    normalize_request,
+    normalized_models,
+)
+from kimibridge.config import AppConfig, default_config_path, load_config
 from kimibridge.upstream import KimiUpstreamClient, UpstreamHttpError, UpstreamUnavailable
 
 
@@ -17,6 +23,17 @@ class KimiBridgeHandler(BaseHTTPRequestHandler):
     def log_message(self, format: str, *args: Any) -> None:
         # Avoid logging request headers; Authorization must never be printed.
         print(f"{self.address_string()} - {format % args}")
+
+    def _get_config(self) -> AppConfig:
+        server_config: AppConfig = getattr(self.server, "config", AppConfig())
+        config_path: Path | None = getattr(self.server, "config_path", None)
+        if config_path and config_path.exists():
+            try:
+                disk_config = load_config(config_path)
+                return replace(disk_config, server=server_config.server)
+            except Exception:
+                pass
+        return server_config
 
     def do_OPTIONS(self) -> None:
         self.send_response(204)
@@ -38,12 +55,25 @@ class KimiBridgeHandler(BaseHTTPRequestHandler):
             return
 
         if path == "/v1/models":
-            config: AppConfig = getattr(self.server, "config", AppConfig())
+            config = self._get_config()
+            effective_profile = detect_provider(
+                base_url=config.kimi.base_url,
+                configured_provider=config.provider,
+                headers=dict(self.headers.items()),
+            )
+            provider_for_models = config.provider if config.provider in {"all", "both"} else effective_profile
+
             auth_header = self.headers.get("Authorization")
             if auth_header:
                 headers = self._forward_headers()
-                clients_to_try = [KimiUpstreamClient(config.kimi.base_url)]
-                if config.kimi.fallback_base_url and config.kimi.fallback_base_url.rstrip("/") != config.kimi.base_url.rstrip("/"):
+                upstream_base_url = config.kimi.base_url
+                if effective_profile.name == "deepseek" and "moonshot.ai" in upstream_base_url.lower():
+                    upstream_base_url = effective_profile.default_base_url
+                elif effective_profile.name == "kimi" and "deepseek.com" in upstream_base_url.lower():
+                    upstream_base_url = effective_profile.default_base_url
+
+                clients_to_try = [KimiUpstreamClient(upstream_base_url)]
+                if config.kimi.fallback_base_url and config.kimi.fallback_base_url.rstrip("/") != upstream_base_url.rstrip("/"):
                     clients_to_try.append(KimiUpstreamClient(config.kimi.fallback_base_url))
 
                 for client in clients_to_try:
@@ -55,7 +85,7 @@ class KimiBridgeHandler(BaseHTTPRequestHandler):
                                 upstream_ids = {
                                     m["id"] for m in upstream_data["data"] if isinstance(m, dict) and "id" in m
                                 }
-                                default_models_data = normalized_models(config.provider).get("data", [])
+                                default_models_data = normalized_models(provider_for_models, base_url=upstream_base_url).get("data", [])
                                 merged = list(upstream_data["data"])
                                 for m in default_models_data:
                                     if isinstance(m, dict) and m.get("id") not in upstream_ids:
@@ -65,7 +95,7 @@ class KimiBridgeHandler(BaseHTTPRequestHandler):
                     except Exception:
                         pass
 
-            self._send_json(200, normalized_models(config.provider))
+            self._send_json(200, normalized_models(provider_for_models, base_url=config.kimi.base_url))
             return
 
         self._send_json(404, {"error": {"message": "Not found"}})
@@ -77,7 +107,7 @@ class KimiBridgeHandler(BaseHTTPRequestHandler):
             self._send_json(404, {"error": {"message": "Not found"}})
             return
 
-        config: AppConfig = self.server.config  # type: ignore[attr-defined]
+        config = self._get_config()
         try:
             payload = self._read_json()
         except ValueError as exc:
@@ -85,19 +115,33 @@ class KimiBridgeHandler(BaseHTTPRequestHandler):
             return
 
         headers = self._forward_headers()
+        model = payload.get("model") if isinstance(payload, dict) else None
+        effective_profile = detect_provider(
+            model=model,
+            base_url=config.kimi.base_url,
+            configured_provider=config.provider,
+            headers=headers,
+        )
+
+        upstream_base_url = config.kimi.base_url
+        if effective_profile.name == "deepseek" and "moonshot.ai" in upstream_base_url.lower():
+            upstream_base_url = effective_profile.default_base_url
+        elif effective_profile.name == "kimi" and "deepseek.com" in upstream_base_url.lower():
+            upstream_base_url = effective_profile.default_base_url
+
         try:
             upstream_payload = normalize_request(
                 payload,
                 mode=config.compatibility.mode,
-                provider=config.provider,
-                base_url=config.kimi.base_url,
+                provider=effective_profile.name,
+                base_url=upstream_base_url,
                 headers=headers,
             )
         except ValueError as exc:
             self._send_json(500, {"error": {"message": str(exc)}})
             return
-        clients_to_try = [KimiUpstreamClient(config.kimi.base_url)]
-        if config.kimi.fallback_base_url and config.kimi.fallback_base_url.rstrip("/") != config.kimi.base_url.rstrip("/"):
+        clients_to_try = [KimiUpstreamClient(upstream_base_url)]
+        if config.kimi.fallback_base_url and config.kimi.fallback_base_url.rstrip("/") != upstream_base_url.rstrip("/"):
             clients_to_try.append(KimiUpstreamClient(config.kimi.fallback_base_url))
 
         if upstream_payload.get("stream") is True:
@@ -223,10 +267,12 @@ class KimiBridgeServer(ThreadingHTTPServer):
     def __init__(self, address: tuple[str, int], config: AppConfig) -> None:
         super().__init__(address, KimiBridgeHandler)
         self.config = config
+        self.config_path: Path | None = None
 
 
-def run_server(config: AppConfig) -> None:
+def run_server(config: AppConfig, config_path: Path | None = None) -> None:
     server = KimiBridgeServer((config.server.host, config.server.port), config)
+    server.config_path = config_path or default_config_path()
     print(f"KimiBridge listening on http://{config.server.host}:{config.server.port}/v1")
     try:
         server.serve_forever()

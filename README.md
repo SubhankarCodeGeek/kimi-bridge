@@ -136,11 +136,14 @@ python3 -m kimibridge.cli logs
 python3 -m kimibridge.cli stop
 python3 -m kimibridge.cli restart
 
+# Switch target provider (1-step setup: sets provider, base-url, and restarts service)
+python3 -m kimibridge.cli setup deepseek
+python3 -m kimibridge.cli setup kimi
+python3 -m kimibridge.cli setup all
+
 # Configuration management
 python3 -m kimibridge.cli config show
 python3 -m kimibridge.cli config set port 5002
-python3 -m kimibridge.cli config set provider deepseek
-python3 -m kimibridge.cli config set base-url https://api.deepseek.com
 python3 -m kimibridge.cli config set compatibility-mode compatible
 ```
 

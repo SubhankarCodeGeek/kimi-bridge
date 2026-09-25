@@ -28,6 +28,25 @@ The installer registers and starts a background scheduled task named `KimiBridge
 
 ---
 
+## Installing for a Specific Provider (e.g. DeepSeek)
+
+You can configure your provider directly during install:
+
+```bash
+# Linux / macOS
+./installers/install.sh --provider deepseek
+
+# Windows (PowerShell)
+.\installers\install.ps1 -Provider deepseek
+```
+
+Or switch providers anytime after installation:
+```bash
+python3 -m kimibridge.cli setup deepseek
+```
+
+---
+
 ## Updating / Upgrading KimiBridge
 
 Upgrades are designed to be zero-downtime and non-destructive for existing settings:

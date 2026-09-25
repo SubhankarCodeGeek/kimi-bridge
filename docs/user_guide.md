@@ -57,23 +57,29 @@ http://127.0.0.1:5001/v1
 
 ## 2. Choosing Your Target Provider
 
-KimiBridge supports provider profiles and automatic detection.
+KimiBridge supports provider profiles and seamless switching with the `setup` (or `use`) command.
 
-### Option 1: Use DeepSeek
+### Option 1: Use DeepSeek (1-Step Setup)
 ```bash
-python3 -m kimibridge.cli config set provider deepseek
-python3 -m kimibridge.cli config set base-url https://api.deepseek.com
-python3 -m kimibridge.cli restart
+python3 -m kimibridge.cli setup deepseek
 ```
-Supported models: `deepseek-chat`, `deepseek-reasoner`, `deepseek-v3-pro`, `deepseek-flash`.
+*(Automatically sets provider `deepseek`, upstream base URL `https://api.deepseek.com`, and restarts the background service).*
+
+Supported models: `deepseek-chat`, `deepseek-reasoner`, `deepseek-v3-pro`, `deepseek-flash`, `deepseek-v3`, `deepseek-r1`.
 
 ### Option 2: Use Kimi / Moonshot AI (Default)
 ```bash
-python3 -m kimibridge.cli config set provider kimi
-python3 -m kimibridge.cli config set base-url https://api.moonshot.ai
-python3 -m kimibridge.cli restart
+python3 -m kimibridge.cli setup kimi
 ```
+*(Automatically sets provider `kimi`, upstream base URL `https://api.moonshot.ai`, and restarts the background service).*
+
 Supported models: `kimi-k3`, `moonshot-v1-8k`, `moonshot-v1-32k`, `moonshot-v1-128k`.
+
+### Option 3: Expose All Providers Concurrently
+```bash
+python3 -m kimibridge.cli setup all
+```
+*(Exposes all supported models simultaneously in client model dropdowns).*
 
 ---
 

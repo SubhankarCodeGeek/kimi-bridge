@@ -43,7 +43,10 @@ class UpstreamHttpError(Exception):
 
 class KimiUpstreamClient:
     def __init__(self, base_url: str, timeout: int = 60) -> None:
-        self.base_url = base_url.rstrip("/")
+        clean_url = base_url.rstrip("/")
+        if clean_url.endswith("/v1"):
+            clean_url = clean_url[:-3]
+        self.base_url = clean_url
         self.timeout = timeout
 
     def chat_completions(
