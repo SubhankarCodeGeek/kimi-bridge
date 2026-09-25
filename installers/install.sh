@@ -51,6 +51,8 @@ install_source() {
     --exclude '.venv' \
     --exclude 'dist' \
     -cf - . | tar -C "$INSTALL_DIR" -xf -
+  chmod +x "$INSTALL_DIR"/installers/*.sh 2>/dev/null || true
+  chmod +x "$INSTALL_DIR"/scripts/*.sh 2>/dev/null || true
 }
 
 install_binary() {
@@ -108,7 +110,8 @@ install_linux_service() {
 
 cleanup_previous_install() {
   local os="$1"
-  log "Cleaning up any existing installation..."
+  local binary_mode="${2:-false}"
+  log "Cleaning up any existing installation and background services..."
   case "$os" in
     macos)
       local plist_path="$HOME/Library/LaunchAgents/com.kimibridge.proxy.plist"
@@ -125,7 +128,47 @@ cleanup_previous_install() {
       fi
       ;;
   esac
-  rm -rf "$INSTALL_DIR"
+
+  # Terminate any running kimibridge processes to ensure ports and binary files are released
+  if command -v pkill >/dev/null 2>&1; then
+    pkill -f "kimibridge" >/dev/null 2>&1 || true
+  fi
+
+  # Explicitly remove any existing binary files
+  log "Checking for existing binaries to remove..."
+  local binary_candidates=(
+    "$INSTALL_DIR/bin/kimibridge"
+    "$INSTALL_DIR/bin/kimibridge.exe"
+    "$CONFIG_DIR/bin/kimibridge"
+    "$CONFIG_DIR/bin/kimibridge.exe"
+    "$HOME/.local/bin/kimibridge"
+    "$HOME/.local/bin/kimibridge.exe"
+  )
+  for bin_loc in "${binary_candidates[@]}"; do
+    if [ -f "$bin_loc" ] || [ -L "$bin_loc" ]; then
+      log "Removing existing binary: $bin_loc"
+      rm -f "$bin_loc"
+    fi
+  done
+  if [ -d "$INSTALL_DIR/bin" ]; then
+    rm -rf "$INSTALL_DIR/bin"
+  fi
+
+  # Remove existing build artifacts if not running in explicit binary install mode
+  if [ "$binary_mode" = false ]; then
+    if [ -d "$REPO_ROOT/dist" ]; then
+      log "Removing existing build artifacts: $REPO_ROOT/dist"
+      rm -rf "$REPO_ROOT/dist"
+    fi
+    if [ -d "$REPO_ROOT/build" ]; then
+      rm -rf "$REPO_ROOT/build"
+    fi
+  fi
+
+  if [ -d "$INSTALL_DIR" ]; then
+    log "Removing previous installation directory: $INSTALL_DIR"
+    rm -rf "$INSTALL_DIR"
+  fi
 }
 
 main() {
@@ -136,6 +179,7 @@ main() {
   local binary_candidate
   local provider="${KIMIBRIDGE_PROVIDER:-}"
   local base_url="${KIMIBRIDGE_BASE_URL:-}"
+  local use_binary_mode=false
 
   while [ $# -gt 0 ]; do
     case "$1" in
@@ -158,6 +202,10 @@ main() {
       --base-url)
         base_url="$2"
         shift 2
+        ;;
+      --binary)
+        use_binary_mode=true
+        shift
         ;;
       *)
         shift
@@ -202,16 +250,18 @@ main() {
   log "OS: $os ($arch)"
   log "Install directory: $INSTALL_DIR"
 
-  cleanup_previous_install "$os"
+  cleanup_previous_install "$os" "$use_binary_mode"
 
   install_source
 
-  if [ -f "$binary_candidate" ]; then
+  if [ "$use_binary_mode" = true ] && [ -f "$binary_candidate" ]; then
     log "Found standalone binary artifact: $binary_candidate"
     install_binary "$binary_candidate"
     exec_cmd="$INSTALL_DIR/bin/kimibridge"
   else
-    log "Standalone binary not found at $binary_candidate. Falling back to Python runtime."
+    if [ "$use_binary_mode" = true ]; then
+      log "Standalone binary not found at $binary_candidate. Falling back to Python runtime."
+    fi
     python_bin="$(detect_python || fail 'python3 is required on host when standalone binary is not built. Install python3 (e.g., sudo apt install python3) or build a standalone binary via python3 scripts/build_binary.py.')"
     exec_cmd="$python_bin -m kimibridge.cli"
   fi

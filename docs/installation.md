@@ -1,48 +1,80 @@
 # Installation & Updates
 
-## Quick Install (macOS & Linux)
+## Recommended: Install for DeepSeek (Android Studio / Agentic Tools)
+
+**Linux / macOS:**
+```bash
+# First-time install:
+git clone https://github.com/SubhankarCodeGeek/kimi-bridge.git
+cd kimi-bridge
+./installers/install-deepseek.sh
+
+# Updating existing install:
+cd kimi-bridge && git pull origin main
+./installers/install-deepseek.sh
+```
+
+**Windows (PowerShell):**
+```powershell
+# First-time install:
+git clone https://github.com/SubhankarCodeGeek/kimi-bridge.git
+cd kimi-bridge
+.\installers\install-deepseek.ps1
+
+# Updating existing install:
+cd kimi-bridge; git pull origin main
+.\installers\install-deepseek.ps1
+```
+
+> **Troubleshooting:**
+> - If `fatal: destination path 'kimi-bridge' already exists and is not an empty directory`: run `cd kimi-bridge && git pull origin main && ./installers/install-deepseek.sh`.
+> - If `bash: Permission denied`: run `chmod +x installers/*.sh` or execute with `bash ./installers/install-deepseek.sh`.
+
+---
+
+## Install for Kimi / Moonshot AI
+
+**Linux / macOS:**
+```bash
+./installers/install-kimi.sh
+```
+
+**Windows (PowerShell):**
+```powershell
+.\installers\install.ps1 -Kimi
+```
+
+---
+
+## Interactive / General Installation
 
 From a local checkout:
 
+**Linux / macOS:**
 ```bash
 ./installers/install.sh
+```
+
+**Windows (PowerShell):**
+```powershell
+.\installers\install.ps1
 ```
 
 The installer:
 - Copies application files to `~/.kimibridge/app`
 - Preserves existing configuration in `~/.kimibridge/config.json`
 - Tests and configures the port (defaults to `5001`, falls back cleanly if busy)
-- Registers and starts the background user service (`launchd` on macOS, `systemd --user` on Linux)
+- Registers and starts the background user service (`launchd` on macOS, `systemd --user` on Linux, Task Scheduler on Windows)
 
 ---
 
-## Quick Install (Windows)
+## Switching Providers Anytime
 
-From PowerShell in a local checkout:
-
-```powershell
-.\installers\install.ps1
-```
-
-The installer registers and starts a background scheduled task named `KimiBridge`.
-
----
-
-## Installing for a Specific Provider (e.g. DeepSeek)
-
-You can configure your provider directly during install:
-
-```bash
-# Linux / macOS
-./installers/install.sh --provider deepseek
-
-# Windows (PowerShell)
-.\installers\install.ps1 -Provider deepseek
-```
-
-Or switch providers anytime after installation:
+Switch providers anytime after installation without reinstalling:
 ```bash
 python3 -m kimibridge.cli setup deepseek
+# or: python3 -m kimibridge.cli setup kimi
+# or: python3 -m kimibridge.cli setup all
 ```
 
 ---

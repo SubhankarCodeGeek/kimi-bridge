@@ -109,17 +109,50 @@ python -m kimibridge.cli doctor
 
 ---
 
+## Installation Issues
+
+### `fatal: destination path 'kimi-bridge' already exists and is not an empty directory`
+
+This happens when `git clone` is executed while a `kimi-bridge` folder already exists locally. To update your installation:
+
+```bash
+cd kimi-bridge
+git pull origin main
+./installers/install-deepseek.sh
+```
+
+### `bash: ./installers/install-deepseek.sh: Permission denied`
+
+This happens if file execution permissions are restricted on the cloned files. To resolve:
+
+```bash
+chmod +x installers/*.sh
+./installers/install-deepseek.sh
+```
+
+Or execute directly through `bash`:
+
+```bash
+bash ./installers/install-deepseek.sh
+```
+
+---
+
 ## Upgrading KimiBridge
 
 When updating to a new version of KimiBridge:
 
 1. Pull the latest repository updates:
    ```bash
-   git pull
+   cd kimi-bridge
+   git pull origin main
    ```
 2. Run the installer:
    ```bash
-   # macOS / Linux
+   # macOS / Linux (DeepSeek)
+   ./installers/install-deepseek.sh
+
+   # macOS / Linux (General)
    ./installers/install.sh
 
    # Windows

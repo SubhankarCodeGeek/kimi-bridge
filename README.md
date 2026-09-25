@@ -1,12 +1,12 @@
 # KimiBridge 🌉
 
-> **Local OpenAI-Compatible Gateway for Kimi / Moonshot AI & Developer Tools**
+> **Local OpenAI-Compatible Gateway for DeepSeek, Kimi / Moonshot AI & Developer Tools**
 
-[![Tests](https://github.com/subhankar-android/kimi-bridge/actions/workflows/test.yml/badge.svg)](https://github.com/subhankar-android/kimi-bridge/actions)
+[![Tests](https://github.com/SubhankarCodeGeek/kimi-bridge/actions/workflows/test.yml/badge.svg)](https://github.com/SubhankarCodeGeek/kimi-bridge/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)](pyproject.toml)
 
-**KimiBridge** runs locally (`http://127.0.0.1:5001/v1`) to bridge OpenAI-compatible developer tools (such as **Android Studio**, **Cursor**, **VS Code**, and **Aider**) with **Kimi / Moonshot AI** models (`api.moonshot.ai`).
+**KimiBridge** runs locally (`http://127.0.0.1:5001/v1`) to bridge OpenAI-compatible developer tools (such as **Android Studio**, **Cursor**, **VS Code**, and **Aider**) with **DeepSeek** (`api.deepseek.com`) and **Kimi / Moonshot AI** (`api.moonshot.ai`) models.
 
 ---
 
@@ -27,21 +27,70 @@
 
 ### Step 1: Install & Start Background Service
 
-Clone the repository and run the installer script on your host machine:
+Choose your target LLM provider:
+
+#### 🌟 Option A: DeepSeek Setup (Recommended for Android Studio & Agentic Tools)
 
 **Linux / macOS:**
 ```bash
+# First-time installation:
 git clone https://github.com/SubhankarCodeGeek/kimi-bridge.git
 cd kimi-bridge
-./installers/install.sh
+./installers/install-deepseek.sh
+
+# If you already cloned previously / updating:
+cd kimi-bridge && git pull origin main
+./installers/install-deepseek.sh
+```
+
+**Windows (PowerShell):**
+```powershell
+# First-time installation:
+git clone https://github.com/SubhankarCodeGeek/kimi-bridge.git
+cd kimi-bridge
+.\installers\install-deepseek.ps1
+
+# If you already cloned previously / updating:
+cd kimi-bridge; git pull origin main
+.\installers\install-deepseek.ps1
+```
+
+> **Troubleshooting Tips:**
+> - If you see `fatal: destination path 'kimi-bridge' already exists`, run `cd kimi-bridge && git pull origin main && ./installers/install-deepseek.sh`.
+> - If you see `bash: Permission denied`, run `chmod +x installers/*.sh` or execute with `bash ./installers/install-deepseek.sh`.
+
+---
+
+#### 🌙 Option B: Kimi / Moonshot AI Setup
+
+**Linux / macOS:**
+```bash
+# First-time installation:
+git clone https://github.com/SubhankarCodeGeek/kimi-bridge.git
+cd kimi-bridge
+./installers/install-kimi.sh
+
+# If you already cloned previously / updating:
+cd kimi-bridge && git pull origin main
+./installers/install-kimi.sh
 ```
 
 **Windows (PowerShell):**
 ```powershell
 git clone https://github.com/SubhankarCodeGeek/kimi-bridge.git
 cd kimi-bridge
-.\installers\install.ps1
+.\installers\install.ps1 -Kimi
 ```
+
+---
+
+#### ⚙️ Option C: Interactive / Custom Setup
+
+Run the general installer to choose your provider interactively:
+- **Linux / macOS:** `./installers/install.sh`
+- **Windows (PowerShell):** `.\installers\install.ps1`
+
+---
 
 > **Note:** The installer automatically registers KimiBridge as a background user service (`systemctl --user` on Linux, `launchd` on macOS, `Task Scheduler` on Windows) listening on `http://127.0.0.1:5001/v1`.
 
@@ -75,15 +124,32 @@ journalctl --user -u kimibridge -n 50 --no-pager
 2. Select **OpenAI-compatible**.
 3. Fill in:
    - **Base URL**: `http://127.0.0.1:5001/v1`
-   - **API Key**: *Your Kimi / Moonshot API Key* (`sk-...`)
-   - **Model**: `kimi-k3` (or `moonshot-v1-8k`, `moonshot-v1-32k`)
-4. Click **Apply / Test Connection**.
+   - **API Key**: *Your Provider API Key* (e.g. your DeepSeek API key or Kimi API key)
+4. Click **Refresh** (or test connection):
+   - For **DeepSeek**: Dropdown automatically populates with `deepseek-chat`, `deepseek-reasoner`, `deepseek-v3-pro`, `deepseek-flash`.
+   - For **Kimi**: Dropdown automatically populates with `kimi-k3`, `moonshot-v1-8k`, `moonshot-v1-32k`, `moonshot-v1-128k`.
+5. Select your desired model and click **Apply**!
 
 ---
 
-### Step 4: Enjoy AI Assistance in Android Studio!
+### Step 4: Switch Providers Anytime (No Reinstallation Needed!)
 
-KimiBridge automatically runs in the background. If you ever need to restart or manage the proxy service, run:
+To switch between DeepSeek and Kimi at any time, run:
+
+```bash
+# Switch to DeepSeek
+python3 -m kimibridge.cli setup deepseek
+
+# Switch to Kimi
+python3 -m kimibridge.cli setup kimi
+
+# Expose both providers
+python3 -m kimibridge.cli setup all
+```
+
+This 1-step command automatically updates your endpoint configuration and restarts the background service. In Android Studio, simply click **Refresh** on the models dropdown.
+
+If you ever need to restart or manage the proxy service manually:
 
 ```bash
 python3 -m kimibridge.cli restart

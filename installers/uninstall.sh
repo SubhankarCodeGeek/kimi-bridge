@@ -33,9 +33,16 @@ main() {
     linux) uninstall_linux_service ;;
   esac
 
+  if command -v pkill >/dev/null 2>&1; then
+    pkill -f "kimibridge" >/dev/null 2>&1 || true
+  fi
+
+  rm -f "$INSTALL_DIR/bin/kimibridge"
+  rm -f "$HOME/.local/bin/kimibridge"
+  rm -f "$HOME/.kimibridge/bin/kimibridge"
   rm -rf "$INSTALL_DIR"
 
-  printf '%s\n' "KimiBridge service and app files were removed."
+  printf '%s\n' "KimiBridge service, binaries, and app files were removed."
   printf '%s\n' "User config remains at $HOME/.kimibridge/config.json"
 }
 

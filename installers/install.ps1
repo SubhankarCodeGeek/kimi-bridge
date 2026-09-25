@@ -3,7 +3,8 @@ param(
     [string]$BaseUrl = $env:KIMIBRIDGE_BASE_URL,
     [switch]$DeepSeek,
     [switch]$Kimi,
-    [switch]$All
+    [switch]$All,
+    [switch]$Binary
 )
 
 $ErrorActionPreference = "Stop"
@@ -59,12 +60,45 @@ function Find-Python {
 Write-Host "KimiBridge Installer"
 Write-Host "Install directory: $InstallDir"
 
-Write-Host "Cleaning up any existing installation..."
+Write-Host "Cleaning up any existing installation and background services..."
 Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue | ForEach-Object {
     Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
     Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
 }
+
+# Stop any running processes named kimibridge or python running kimibridge
+Get-Process -Name "kimibridge" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+Get-Process -Name "python*", "py*" -ErrorAction SilentlyContinue | Where-Object {
+    $_.CommandLine -and $_.CommandLine -like "*kimibridge*"
+} | Stop-Process -Force -ErrorAction SilentlyContinue
+Start-Sleep -Milliseconds 300
+
+Write-Host "Checking for existing binaries to remove..."
+$BinaryCandidates = @(
+    (Join-Path $InstallDir "bin\kimibridge.exe"),
+    (Join-Path $ConfigDir "bin\kimibridge.exe")
+)
+foreach ($binPath in $BinaryCandidates) {
+    if (Test-Path $binPath) {
+        Write-Host "Removing existing binary: $binPath"
+        Remove-Item -Path $binPath -Force -ErrorAction SilentlyContinue
+    }
+}
+
+if (-not $Binary) {
+    $DistDir = Join-Path $RepoRoot "dist"
+    if (Test-Path $DistDir) {
+        Write-Host "Removing existing build artifacts: $DistDir"
+        Remove-Item -Path $DistDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    $BuildDir = Join-Path $RepoRoot "build"
+    if (Test-Path $BuildDir) {
+        Remove-Item -Path $BuildDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
 if (Test-Path $InstallDir) {
+    Write-Host "Removing previous installation directory: $InstallDir"
     Remove-Item -Path $InstallDir -Recurse -Force -ErrorAction SilentlyContinue
 }
 
@@ -74,7 +108,7 @@ New-Item -ItemType Directory -Force -Path $ConfigDir | Out-Null
 Copy-Item -Path (Join-Path $RepoRoot "*") -Destination $InstallDir -Recurse -Force
 
 $BinaryCandidate = Join-Path $RepoRoot "dist\kimibridge-windows-x86_64.exe"
-if (Test-Path $BinaryCandidate) {
+if ($Binary -and (Test-Path $BinaryCandidate)) {
     Write-Host "Found standalone binary artifact: $BinaryCandidate"
     $BinDir = Join-Path $InstallDir "bin"
     New-Item -ItemType Directory -Force -Path $BinDir | Out-Null
@@ -82,7 +116,9 @@ if (Test-Path $BinaryCandidate) {
     $ExecPath = Join-Path $BinDir "kimibridge.exe"
     $ExecArgs = "start --auto-port"
 } else {
-    Write-Host "Standalone binary not found. Falling back to Python runtime."
+    if ($Binary) {
+        Write-Host "Standalone binary not found at $BinaryCandidate. Falling back to Python runtime."
+    }
     $PythonBin = Find-Python
     $ExecPath = $PythonBin
     $ExecArgs = "-m kimibridge.cli start --auto-port"
