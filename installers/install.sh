@@ -62,45 +62,80 @@ install_binary() {
   chmod +x "$INSTALL_DIR/bin/kimibridge"
 }
 
+MACOS_LABEL="com.kimibridge.proxy"
+
 configure_port() {
   local exec_cmd="$1"
-  eval "$exec_cmd start --auto-port --save-port --dry-run"
+  local provider_arg="$2"
+  local port_arg="${3:-}"
+  local cmd="$exec_cmd start --auto-port --save-port --dry-run"
+  if [ -n "$provider_arg" ]; then
+    cmd="$cmd --provider $provider_arg"
+  fi
+  if [ -n "$port_arg" ]; then
+    cmd="$cmd --port $port_arg"
+  fi
+  eval "$cmd"
 }
 
 install_macos_service() {
   local exec_cmd="$1"
+  local provider_arg="$2"
   local plist_dir="$HOME/Library/LaunchAgents"
-  local plist_path="$plist_dir/com.kimibridge.proxy.plist"
+  local plist_path="$plist_dir/${MACOS_LABEL}.plist"
+  local log_out="$INSTALL_DIR/${SERVICE_NAME}.log"
+  local log_err="$INSTALL_DIR/${SERVICE_NAME}.err.log"
+
+  local extra_arg=""
+  if [ -n "$provider_arg" ] && [ "$provider_arg" != "all" ]; then
+    extra_arg="--provider $provider_arg"
+  fi
 
   mkdir -p "$plist_dir"
-  awk -v cmd="$exec_cmd" -v dir="$INSTALL_DIR" '
+  awk -v cmd="$exec_cmd" -v dir="$INSTALL_DIR" -v extra="$extra_arg" -v label="$MACOS_LABEL" -v out="$log_out" -v err="$log_err" '
     /__PROGRAM_ARGUMENTS__/ {
-      n = split(cmd " start --auto-port", a, " ")
+      full_cmd = cmd " start " extra " --auto-port"
+      n = split(full_cmd, a, " ")
       for (i = 1; i <= n; i++) {
-        print "    <string>" a[i] "</string>"
+        if (a[i] != "") {
+          print "    <string>" a[i] "</string>"
+        }
       }
       next
     }
-    { gsub(/__INSTALL_DIR__/, dir); print }
+    {
+      gsub(/__INSTALL_DIR__/, dir);
+      gsub(/__SERVICE_LABEL__/, label);
+      gsub(/__LOG_PATH__/, out);
+      gsub(/__ERR_LOG_PATH__/, err);
+      print;
+    }
   ' "$INSTALL_DIR/services/macos/com.kimibridge.proxy.plist" > "$plist_path"
 
   launchctl unload "$plist_path" >/dev/null 2>&1 || true
   launchctl load "$plist_path"
-  launchctl start com.kimibridge.proxy >/dev/null 2>&1 || true
+  launchctl start "$MACOS_LABEL" >/dev/null 2>&1 || true
 }
 
 install_linux_service() {
   local exec_cmd="$1"
+  local provider_arg="$2"
   local service_dir="$HOME/.config/systemd/user"
-  local service_path="$service_dir/kimibridge.service"
+  local service_path="$service_dir/${SERVICE_NAME}.service"
 
   command -v systemctl >/dev/null 2>&1 || fail "systemd user services are required for automatic startup."
+
+  local provider_flag=""
+  if [ -n "$provider_arg" ] && [ "$provider_arg" != "all" ]; then
+    provider_flag="--provider $provider_arg"
+  fi
 
   mkdir -p "$service_dir"
   sed \
     -e "s#__EXEC_CMD__#$exec_cmd#g" \
     -e "s#__PYTHON_BIN__#$exec_cmd#g" \
     -e "s#__INSTALL_DIR__#$INSTALL_DIR#g" \
+    -e "s#__PROVIDER_FLAG__#$provider_flag#g" \
     "$INSTALL_DIR/services/linux/kimibridge.service" > "$service_path"
 
   systemctl --user daemon-reload
@@ -110,29 +145,45 @@ install_linux_service() {
 
 cleanup_previous_install() {
   local os="$1"
-  local binary_mode="${2:-false}"
-  log "Cleaning up any existing installation and background services..."
+  local service="$2"
+  local provider_arg="$3"
+  local binary_mode="${4:-false}"
+  log "Checking for existing background service: $service..."
   case "$os" in
     macos)
-      local plist_path="$HOME/Library/LaunchAgents/com.kimibridge.proxy.plist"
+      local plist_path="$HOME/Library/LaunchAgents/${MACOS_LABEL}.plist"
       launchctl unload "$plist_path" >/dev/null 2>&1 || true
       rm -f "$plist_path"
       ;;
     linux)
-      local service_path="$HOME/.config/systemd/user/kimibridge.service"
+      local service_path="$HOME/.config/systemd/user/${service}.service"
       if command -v systemctl >/dev/null 2>&1; then
-        systemctl --user stop kimibridge >/dev/null 2>&1 || true
-        systemctl --user disable kimibridge >/dev/null 2>&1 || true
+        systemctl --user stop "$service" >/dev/null 2>&1 || true
+        systemctl --user disable "$service" >/dev/null 2>&1 || true
         rm -f "$service_path"
         systemctl --user daemon-reload >/dev/null 2>&1 || true
       fi
+
+      # If this specific provider was running under legacy un-prefixed kimibridge.service,
+      # stop legacy service to migrate cleanly to kimibridge-<provider>.service
+      if [ "$service" != "kimibridge" ] && [ -f "$HOME/.config/systemd/user/kimibridge.service" ]; then
+        local legacy_prov=""
+        if command -v python3 >/dev/null 2>&1; then
+          legacy_prov=$(python3 -c "import sys; sys.path.insert(0, '$REPO_ROOT'); from kimibridge.ports import get_kimibridge_status; info = get_kimibridge_status('127.0.0.1', 5001); print((info or {}).get('provider') or '')" 2>/dev/null || true)
+        fi
+        if [ -z "$legacy_prov" ] && [ -f "$CONFIG_DIR/config.json" ]; then
+          legacy_prov=$(grep -o '"provider": *"[^"]*"' "$CONFIG_DIR/config.json" 2>/dev/null | cut -d'"' -f4 || true)
+        fi
+        if [ -n "$legacy_prov" ] && [ "$legacy_prov" = "$provider_arg" ]; then
+          log "Migrating legacy kimibridge.service for $provider_arg to $service..."
+          systemctl --user stop kimibridge >/dev/null 2>&1 || true
+          systemctl --user disable kimibridge >/dev/null 2>&1 || true
+          rm -f "$HOME/.config/systemd/user/kimibridge.service"
+          systemctl --user daemon-reload >/dev/null 2>&1 || true
+        fi
+      fi
       ;;
   esac
-
-  # Terminate any running kimibridge processes to ensure ports and binary files are released
-  if command -v pkill >/dev/null 2>&1; then
-    pkill -f "kimibridge" >/dev/null 2>&1 || true
-  fi
 
   # Explicitly remove any existing binary files
   log "Checking for existing binaries to remove..."
@@ -164,11 +215,6 @@ cleanup_previous_install() {
       rm -rf "$REPO_ROOT/build"
     fi
   fi
-
-  if [ -d "$INSTALL_DIR" ]; then
-    log "Removing previous installation directory: $INSTALL_DIR"
-    rm -rf "$INSTALL_DIR"
-  fi
 }
 
 main() {
@@ -179,6 +225,7 @@ main() {
   local binary_candidate
   local provider="${KIMIBRIDGE_PROVIDER:-}"
   local base_url="${KIMIBRIDGE_BASE_URL:-}"
+  local requested_port=""
   local use_binary_mode=false
 
   while [ $# -gt 0 ]; do
@@ -202,6 +249,14 @@ main() {
       --base-url)
         base_url="$2"
         shift 2
+        ;;
+      --port)
+        requested_port="$2"
+        shift 2
+        ;;
+      --port=*)
+        requested_port="${1#*=}"
+        shift
         ;;
       --binary)
         use_binary_mode=true
@@ -242,15 +297,30 @@ main() {
     fi
   fi
 
+  provider=$(echo "$provider" | tr '[:upper:]' '[:lower:]')
+  if [ "$provider" = "moonshot" ]; then
+    provider="kimi"
+  fi
+
+  if [ -n "$provider" ] && [ "$provider" != "all" ]; then
+    SERVICE_NAME="kimibridge-$provider"
+    MACOS_LABEL="com.kimibridge.proxy.$provider"
+  else
+    SERVICE_NAME="kimibridge"
+    MACOS_LABEL="com.kimibridge.proxy"
+  fi
+
   os="$(detect_os)"
   arch="$(detect_arch)"
   binary_candidate="$REPO_ROOT/dist/kimibridge-${os}-${arch}"
 
   log "KimiBridge Installer"
   log "OS: $os ($arch)"
+  log "Target Provider: ${provider:-default}"
+  log "Service Name: $SERVICE_NAME"
   log "Install directory: $INSTALL_DIR"
 
-  cleanup_previous_install "$os" "$use_binary_mode"
+  cleanup_previous_install "$os" "$SERVICE_NAME" "$provider" "$use_binary_mode"
 
   install_source
 
@@ -267,34 +337,55 @@ main() {
   fi
 
   cd "$INSTALL_DIR"
-  configure_port "$exec_cmd"
-
-  case "$os" in
-    macos) install_macos_service "$exec_cmd" ;;
-    linux) install_linux_service "$exec_cmd" ;;
-  esac
 
   if [ -n "$provider" ]; then
     log ""
-    log "Configuring provider: $provider"
+    log "Configuring provider settings: $provider"
+    local setup_args="\"$provider\""
     if [ -n "$base_url" ]; then
-      eval "$exec_cmd setup \"$provider\" --base-url \"$base_url\""
-    else
-      eval "$exec_cmd setup \"$provider\""
+      setup_args="$setup_args --base-url \"$base_url\""
     fi
+    if [ -n "$requested_port" ]; then
+      setup_args="$setup_args --port \"$requested_port\""
+    fi
+    eval "$exec_cmd setup $setup_args --no-restart"
   else
+    configure_port "$exec_cmd" "$provider" "$requested_port"
     log ""
     eval "$exec_cmd config show"
   fi
 
+  case "$os" in
+    macos) install_macos_service "$exec_cmd" "$provider" ;;
+    linux) install_linux_service "$exec_cmd" "$provider" ;;
+  esac
+
+  local active_port
+  active_port=$(python3 -c "from kimibridge.config import load_config; print(load_config(provider='$provider').server.port)" 2>/dev/null || echo "5001")
+
   log ""
   log "============================================================"
-  log "  KimiBridge is ready for Android Studio!"
+  log "  KimiBridge (${provider:-default}) is ready for Android Studio!"
   log "============================================================"
-  log "  Base URL:  http://127.0.0.1:5001/v1"
+  log "  Provider:  ${provider:-default}"
+  log "  Base URL:  http://127.0.0.1:${active_port}/v1"
   log "  Action:    In Android Studio, enter your API key and"
   log "             click Refresh to populate the model dropdown."
   log "============================================================"
+
+  # Display all active endpoints if multiple instances exist
+  python3 -c "
+from kimibridge.config import list_configured_providers
+from kimibridge.health import check_health
+cfgs = list_configured_providers()
+if len(cfgs) > 1:
+    print('  Active Configured Endpoints:')
+    for p, _, cfg in cfgs:
+        h = check_health(cfg.server.host, cfg.server.port)
+        stat = 'running' if h.ok else 'stopped'
+        print(f'    • {p.capitalize():<10} http://{cfg.server.host}:{cfg.server.port}/v1 [{stat}]')
+    print('============================================================')
+" 2>/dev/null || true
 }
 
 main "$@"

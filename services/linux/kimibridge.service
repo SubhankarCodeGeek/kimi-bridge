@@ -5,7 +5,7 @@ After=network.target
 [Service]
 Type=simple
 WorkingDirectory=__INSTALL_DIR__
-ExecStart=__EXEC_CMD__ start --auto-port
+ExecStart=__EXEC_CMD__ start __PROVIDER_FLAG__ --auto-port
 Restart=on-failure
 RestartSec=3
 

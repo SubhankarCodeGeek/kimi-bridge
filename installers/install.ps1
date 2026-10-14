@@ -1,6 +1,7 @@
 param(
     [string]$Provider = $env:KIMIBRIDGE_PROVIDER,
     [string]$BaseUrl = $env:KIMIBRIDGE_BASE_URL,
+    [int]$Port = 0,
     [switch]$DeepSeek,
     [switch]$Kimi,
     [switch]$All,
@@ -34,9 +35,12 @@ if (-not $Provider) {
     }
 }
 
+$NormalizedProvider = if ($Provider) { $Provider.ToLower() } else { "" }
+if ($NormalizedProvider -eq "moonshot") { $NormalizedProvider = "kimi" }
+$TaskName = if ($NormalizedProvider -and $NormalizedProvider -ne "all") { "KimiBridge-$NormalizedProvider" } else { "KimiBridge" }
+
 $InstallDir = if ($env:KIMIBRIDGE_INSTALL_DIR) { $env:KIMIBRIDGE_INSTALL_DIR } else { Join-Path $env:USERPROFILE ".kimibridge\app" }
 $RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
-$TaskName = "KimiBridge"
 
 function Find-Python {
     $python = Get-Command py -ErrorAction SilentlyContinue
@@ -58,30 +62,30 @@ function Find-Python {
 }
 
 Write-Host "KimiBridge Installer"
+Write-Host "Target Provider: $NormalizedProvider"
+Write-Host "Scheduled Task:  $TaskName"
 Write-Host "Install directory: $InstallDir"
 
-Write-Host "Cleaning up any existing installation and background services..."
+Write-Host "Checking for existing task: $TaskName..."
 Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue | ForEach-Object {
     Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
     Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
 }
 
-# Stop any running processes named kimibridge or python running kimibridge
-Get-Process -Name "kimibridge" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-Get-Process -Name "python*", "py*" -ErrorAction SilentlyContinue | Where-Object {
-    $_.CommandLine -and $_.CommandLine -like "*kimibridge*"
-} | Stop-Process -Force -ErrorAction SilentlyContinue
-Start-Sleep -Milliseconds 300
-
-Write-Host "Checking for existing binaries to remove..."
-$BinaryCandidates = @(
-    (Join-Path $InstallDir "bin\kimibridge.exe"),
-    (Join-Path $ConfigDir "bin\kimibridge.exe")
-)
-foreach ($binPath in $BinaryCandidates) {
-    if (Test-Path $binPath) {
-        Write-Host "Removing existing binary: $binPath"
-        Remove-Item -Path $binPath -Force -ErrorAction SilentlyContinue
+# If migrating from legacy KimiBridge task for this provider
+if ($TaskName -ne "KimiBridge") {
+    $LegacyConfig = Join-Path $ConfigDir "config.json"
+    if (Test-Path $LegacyConfig) {
+        try {
+            $legacyJson = Get-Content $LegacyConfig -Raw | ConvertFrom-Json
+            if ($legacyJson.provider -eq $NormalizedProvider) {
+                Write-Host "Migrating legacy KimiBridge task to $TaskName..."
+                Get-ScheduledTask -TaskName "KimiBridge" -ErrorAction SilentlyContinue | ForEach-Object {
+                    Stop-ScheduledTask -TaskName "KimiBridge" -ErrorAction SilentlyContinue
+                    Unregister-ScheduledTask -TaskName "KimiBridge" -Confirm:$false -ErrorAction SilentlyContinue
+                }
+            }
+        } catch {}
     }
 }
 
@@ -93,19 +97,17 @@ if (-not $Binary) {
     }
     $BuildDir = Join-Path $RepoRoot "build"
     if (Test-Path $BuildDir) {
+        Write-Host "Removing existing build artifacts: $BuildDir"
         Remove-Item -Path $BuildDir -Recurse -Force -ErrorAction SilentlyContinue
     }
-}
-
-if (Test-Path $InstallDir) {
-    Write-Host "Removing previous installation directory: $InstallDir"
-    Remove-Item -Path $InstallDir -Recurse -Force -ErrorAction SilentlyContinue
 }
 
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 New-Item -ItemType Directory -Force -Path $ConfigDir | Out-Null
 
 Copy-Item -Path (Join-Path $RepoRoot "*") -Destination $InstallDir -Recurse -Force
+
+$ProviderArg = if ($NormalizedProvider -and $NormalizedProvider -ne "all") { "--provider $NormalizedProvider" } else { "" }
 
 $BinaryCandidate = Join-Path $RepoRoot "dist\kimibridge-windows-x86_64.exe"
 if ($Binary -and (Test-Path $BinaryCandidate)) {
@@ -114,22 +116,39 @@ if ($Binary -and (Test-Path $BinaryCandidate)) {
     New-Item -ItemType Directory -Force -Path $BinDir | Out-Null
     Copy-Item -Path $BinaryCandidate -Destination (Join-Path $BinDir "kimibridge.exe") -Force
     $ExecPath = Join-Path $BinDir "kimibridge.exe"
-    $ExecArgs = "start --auto-port"
+    $ExecArgs = "start $ProviderArg --auto-port".Trim()
 } else {
     if ($Binary) {
         Write-Host "Standalone binary not found at $BinaryCandidate. Falling back to Python runtime."
     }
     $PythonBin = Find-Python
     $ExecPath = $PythonBin
-    $ExecArgs = "-m kimibridge.cli start --auto-port"
+    $ExecArgs = "-m kimibridge.cli start $ProviderArg --auto-port".Trim()
 }
 
 Push-Location $InstallDir
 try {
-    if ($ExecPath -eq $PythonBin) {
-        & $PythonBin -m kimibridge.cli start --auto-port --save-port --dry-run
+    if ($NormalizedProvider) {
+        Write-Host ""
+        Write-Host "Configuring provider settings: $NormalizedProvider"
+        $setupArgs = @("setup", $NormalizedProvider, "--no-restart")
+        if ($BaseUrl) { $setupArgs += @("--base-url", $BaseUrl) }
+        if ($Port -gt 0) { $setupArgs += @("--port", "$Port") }
+
+        if ($ExecPath -eq $PythonBin) {
+            & $PythonBin -m kimibridge.cli @setupArgs
+        } else {
+            & $ExecPath @setupArgs
+        }
     } else {
-        & $ExecPath start --auto-port --save-port --dry-run
+        $dryRunArgs = @("start", "--auto-port", "--save-port", "--dry-run")
+        if ($Port -gt 0) { $dryRunArgs += @("--port", "$Port") }
+
+        if ($ExecPath -eq $PythonBin) {
+            & $PythonBin -m kimibridge.cli @dryRunArgs
+        } else {
+            & $ExecPath @dryRunArgs
+        }
     }
 }
 finally {
@@ -144,30 +163,14 @@ $Task = New-ScheduledTask -Action $Action -Trigger $Trigger -Principal $Principa
 Register-ScheduledTask -TaskName $TaskName -InputObject $Task -Force | Out-Null
 Start-ScheduledTask -TaskName $TaskName
 
-if ($Provider) {
-    Write-Host ""
-    Write-Host "Configuring provider: $Provider"
-    if ($ExecPath -eq $PythonBin) {
-        if ($BaseUrl) {
-            & $PythonBin -m kimibridge.cli setup $Provider --base-url $BaseUrl
-        } else {
-            & $PythonBin -m kimibridge.cli setup $Provider
-        }
-    } else {
-        if ($BaseUrl) {
-            & $ExecPath setup $Provider --base-url $BaseUrl
-        } else {
-            & $ExecPath setup $Provider
-        }
-    }
-}
-
 Write-Host ""
-Write-Host "KimiBridge is installed."
+Write-Host "============================================================"
+Write-Host "  KimiBridge ($NormalizedProvider) is installed!"
+Write-Host "============================================================"
 if ($ExecPath -eq $PythonBin) {
-    & $PythonBin -m kimibridge.cli config show
+    & $PythonBin -m kimibridge.cli status
 } else {
-    & $ExecPath config show
+    & $ExecPath status
 }
-Write-Host ""
+Write-Host "============================================================"
 Write-Host "Use the endpoint above in Android Studio as an OpenAI-compatible provider."

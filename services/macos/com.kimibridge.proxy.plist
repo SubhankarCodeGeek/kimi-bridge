@@ -4,7 +4,7 @@
 <plist version="1.0">
 <dict>
   <key>Label</key>
-  <string>com.kimibridge.proxy</string>
+  <string>__SERVICE_LABEL__</string>
 
   <key>ProgramArguments</key>
   <array>
@@ -21,9 +21,9 @@ __PROGRAM_ARGUMENTS__
   <true/>
 
   <key>StandardOutPath</key>
-  <string>__INSTALL_DIR__/kimibridge.log</string>
+  <string>__LOG_PATH__</string>
 
   <key>StandardErrorPath</key>
-  <string>__INSTALL_DIR__/kimibridge.err.log</string>
+  <string>__ERR_LOG_PATH__</string>
 </dict>
 </plist>

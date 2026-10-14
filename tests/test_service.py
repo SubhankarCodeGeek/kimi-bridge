@@ -141,6 +141,7 @@ class InstallerServiceTemplateTests(unittest.TestCase):
             "-e", f"s#__EXEC_CMD__#{exec_cmd}#g",
             "-e", f"s#__PYTHON_BIN__#{exec_cmd}#g",
             "-e", f"s#__INSTALL_DIR__#{install_dir}#g",
+            "-e", "s#__PROVIDER_FLAG__ *##g",
             str(template),
         ]
         res = subprocess.run(cmd, capture_output=True, text=True, check=True)
@@ -165,6 +166,7 @@ class InstallerServiceTemplateTests(unittest.TestCase):
             "-e", f"s#__EXEC_CMD__#{exec_cmd}#g",
             "-e", f"s#__PYTHON_BIN__#{exec_cmd}#g",
             "-e", f"s#__INSTALL_DIR__#{install_dir}#g",
+            "-e", "s#__PROVIDER_FLAG__ *##g",
             str(template),
         ]
         res = subprocess.run(cmd, capture_output=True, text=True, check=True)

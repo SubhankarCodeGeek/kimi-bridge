@@ -309,7 +309,7 @@ class IntegrationTests(unittest.TestCase):
         assert MockUpstreamHandler.received is not None
         self.assertEqual(MockUpstreamHandler.received["path"], "/v1/chat/completions")
         forwarded = MockUpstreamHandler.received["payload"]
-        self.assertEqual(forwarded["model"], "deepseek-reasoner")
+        self.assertEqual(forwarded["model"], "deepseek-flash")
         self.assertEqual(forwarded["messages"][0]["role"], "system")
         self.assertEqual(forwarded["messages"][1]["content"], "Why did my build fail?")
         self.assertEqual(forwarded["max_tokens"], 256)

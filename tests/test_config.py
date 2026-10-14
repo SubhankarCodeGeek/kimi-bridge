@@ -51,6 +51,39 @@ class ConfigTests(unittest.TestCase):
             self.assertIsNone(loaded.kimi.fallback_base_url)
             self.assertEqual(loaded.provider, "kimi")
 
+    def test_provider_specific_config_paths(self) -> None:
+        from kimibridge.config import default_config_path
+        kimi_path = default_config_path("kimi")
+        deepseek_path = default_config_path("deepseek")
+        default_path = default_config_path()
+
+        self.assertTrue(kimi_path.name.endswith("config-kimi.json"))
+        self.assertTrue(deepseek_path.name.endswith("config-deepseek.json"))
+        self.assertEqual(default_path.name, "config.json")
+
+    def test_provider_specific_save_and_load(self) -> None:
+        from kimibridge.config import list_configured_providers
+        with tempfile.TemporaryDirectory() as temp_dir:
+            dir_path = Path(temp_dir)
+            kimi_cfg = AppConfig(server=ServerConfig(port=5001), provider="kimi")
+            deepseek_cfg = AppConfig(server=ServerConfig(port=5002), provider="deepseek")
+
+            save_config(kimi_cfg, path=dir_path / "config-kimi.json", provider="kimi")
+            save_config(deepseek_cfg, path=dir_path / "config-deepseek.json", provider="deepseek")
+
+            loaded_kimi = load_config(path=dir_path / "config-kimi.json")
+            loaded_deepseek = load_config(path=dir_path / "config-deepseek.json")
+
+            self.assertEqual(loaded_kimi.server.port, 5001)
+            self.assertEqual(loaded_kimi.provider, "kimi")
+            self.assertEqual(loaded_deepseek.server.port, 5002)
+            self.assertEqual(loaded_deepseek.provider, "deepseek")
+
+            providers = list_configured_providers(dir_path)
+            provider_names = [p[0] for p in providers]
+            self.assertIn("kimi", provider_names)
+            self.assertIn("deepseek", provider_names)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -50,12 +50,15 @@ class KimiBridgeHandler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
 
         if path == "/health":
+            config = self._get_config()
             self._send_json(
                 200,
                 {
                     "ok": True,
                     "service": "kimibridge",
                     "version": __version__,
+                    "provider": config.provider,
+                    "port": config.server.port,
                 },
             )
             return
@@ -296,7 +299,7 @@ class KimiBridgeServer(ThreadingHTTPServer):
 
 def run_server(config: AppConfig, config_path: Path | None = None) -> None:
     server = KimiBridgeServer((config.server.host, config.server.port), config)
-    server.config_path = config_path or default_config_path()
+    server.config_path = config_path or default_config_path(config.provider)
     print(f"KimiBridge listening on http://{config.server.host}:{config.server.port}/v1")
     try:
         server.serve_forever()

@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import json
 import socket
+from typing import Any
 from urllib.error import URLError
 from urllib.request import urlopen
 
@@ -39,29 +40,82 @@ def check_port_available(host: str, port: int) -> bool | None:
         return False
 
 
-def is_kimibridge_running(host: str, port: int, timeout: float = 0.5) -> bool:
+def _normalize_provider(provider: str | None) -> str:
+    p = (provider or "").strip().lower()
+    if p in {"moonshot"}:
+        return "kimi"
+    return p
+
+
+def _detect_provider_from_models(host: str, port: int, timeout: float = 0.5) -> str | None:
+    try:
+        with urlopen(f"http://{host}:{port}/v1/models", timeout=timeout) as response:
+            if response.status != 200:
+                return None
+            body = response.read().decode("utf-8")
+        data = json.loads(body)
+        models = [str(m.get("id", "")).lower() for m in data.get("data", [])]
+        has_deepseek = any("deepseek" in m for m in models)
+        has_kimi = any("kimi" in m or "moonshot" in m for m in models)
+        if has_deepseek and has_kimi:
+            return "all"
+        if has_deepseek:
+            return "deepseek"
+        if has_kimi:
+            return "kimi"
+    except Exception:
+        pass
+    return None
+
+
+def get_kimibridge_status(host: str, port: int, timeout: float = 0.5) -> dict[str, Any] | None:
     try:
         with urlopen(f"http://{host}:{port}/health", timeout=timeout) as response:
+            if response.status != 200:
+                return None
             body = response.read().decode("utf-8")
     except (OSError, URLError, TimeoutError):
-        return False
-
-    if response.status != 200:
-        return False
+        return None
 
     try:
         payload = json.loads(body)
     except json.JSONDecodeError:
-        return False
+        return None
 
-    return payload.get("service") == "kimibridge"
+    if isinstance(payload, dict) and payload.get("service") == "kimibridge":
+        if not payload.get("provider"):
+            detected = _detect_provider_from_models(host, port, timeout=timeout)
+            if detected:
+                payload["provider"] = detected
+        return payload
+    return None
+
+
+def is_kimibridge_running(host: str, port: int, timeout: float = 0.5) -> bool:
+    return get_kimibridge_status(host, port, timeout) is not None
+
+
+def find_available_port_for_provider(
+    host: str,
+    start_port: int,
+    limit: int = 10,
+    target_provider: str | None = None,
+) -> tuple[int, str] | None:
+    target = _normalize_provider(target_provider)
+    for port in range(start_port, start_port + limit + 1):
+        if check_port_available(host, port) is True:
+            return (port, "available")
+        info = get_kimibridge_status(host, port)
+        if info and target:
+            running = _normalize_provider(info.get("provider"))
+            if running == target:
+                return (port, "already_running")
+    return None
 
 
 def find_available_port(host: str, start_port: int, limit: int = 10) -> int | None:
-    for port in range(start_port, start_port + limit + 1):
-        if check_port_available(host, port) is True:
-            return port
-    return None
+    res = find_available_port_for_provider(host, start_port, limit=limit)
+    return res[0] if res is not None else None
 
 
 def resolve_port(
@@ -70,7 +124,9 @@ def resolve_port(
     *,
     auto_port: bool = False,
     search_limit: int = 10,
+    target_provider: str | None = None,
 ) -> PortResolution:
+    target = _normalize_provider(target_provider)
     availability = check_port_available(host, requested_port)
 
     if availability is True:
@@ -82,7 +138,63 @@ def resolve_port(
             message=f"Port {requested_port} is available.",
         )
 
-    if is_kimibridge_running(host, requested_port):
+    running_info = get_kimibridge_status(host, requested_port)
+    if running_info:
+        running_provider = _normalize_provider(running_info.get("provider"))
+        if target:
+            if running_provider and target == running_provider:
+                return PortResolution(
+                    host=host,
+                    requested_port=requested_port,
+                    selected_port=requested_port,
+                    status="already_running",
+                    message=f"KimiBridge ({running_provider}) is already running on port {requested_port}.",
+                )
+
+            provider_desc = f"hosting '{running_provider}'" if running_provider else "already in use"
+            if not auto_port:
+                return PortResolution(
+                    host=host,
+                    requested_port=requested_port,
+                    selected_port=requested_port,
+                    status="conflict",
+                    message=(
+                        f"Port {requested_port} is {provider_desc}. "
+                        f"Use --auto-port or choose a different port for '{target_provider}'."
+                    ),
+                )
+
+            candidate = find_available_port_for_provider(
+                host,
+                requested_port + 1,
+                limit=search_limit,
+                target_provider=target,
+            )
+            if candidate is None:
+                return PortResolution(
+                    host=host,
+                    requested_port=requested_port,
+                    selected_port=requested_port,
+                    status="no_available_port",
+                    message=(
+                        f"Port {requested_port} is {provider_desc} and no available port "
+                        f"was found in the next {search_limit} ports."
+                    ),
+                )
+
+            selected_port, port_status = candidate
+            current_desc = f"currently hosting '{running_provider}'" if running_provider else "currently in use"
+            return PortResolution(
+                host=host,
+                requested_port=requested_port,
+                selected_port=selected_port,
+                status="already_running" if port_status == "already_running" else "fallback",
+                message=(
+                    f"Port {requested_port} is {current_desc}. "
+                    f"Selected port {selected_port} for '{target_provider}' to prevent conflict."
+                ),
+            )
+
         return PortResolution(
             host=host,
             requested_port=requested_port,
@@ -115,8 +227,13 @@ def resolve_port(
             ),
         )
 
-    fallback = find_available_port(host, requested_port + 1, search_limit)
-    if fallback is None:
+    candidate = find_available_port_for_provider(
+        host,
+        requested_port + 1,
+        limit=search_limit,
+        target_provider=target,
+    )
+    if candidate is None:
         return PortResolution(
             host=host,
             requested_port=requested_port,
@@ -128,10 +245,11 @@ def resolve_port(
             ),
         )
 
+    fallback, fallback_status = candidate
     return PortResolution(
         host=host,
         requested_port=requested_port,
         selected_port=fallback,
-        status="fallback",
+        status="already_running" if fallback_status == "already_running" else "fallback",
         message=f"Port {requested_port} is unavailable. Selected port {fallback}.",
     )

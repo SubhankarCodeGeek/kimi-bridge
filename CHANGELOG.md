@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.3
+
+- **Concurrent Multi-Provider Hosting & Port Isolation**:
+  - Store provider configurations separately (`~/.kimibridge/config-kimi.json`, `~/.kimibridge/config-deepseek.json`) so installing one provider never overwrites or stops another.
+  - Implement smart port collision detection: when port `5001` is already hosting another provider, automatically assign the next available port (e.g. `5002`) so Android Studio can configure both providers simultaneously with zero model list conflict.
+  - Support explicit `--port` overrides in all installers (`install.sh`, `install-deepseek.sh`, `install-kimi.sh`, `install.ps1`, `install-deepseek.ps1`, `install-kimi.ps1`) and CLI commands.
+  - Run provider-specific background services (`kimibridge-kimi`, `kimibridge-deepseek`) concurrently across Linux (`systemd`), macOS (`launchd`), and Windows (`Task Scheduler`).
+  - Update `/health` endpoint to report running provider and port, with fallback model-inspection heuristic for backwards compatibility with legacy instances.
+  - Add multi-instance reporting to `kimibridge status` and `kimibridge doctor`, listing all active provider endpoints at a glance.
+  - Update `uninstall.sh` and `uninstall.ps1` to support `--provider <name>` (removes only that provider's service without touching shared binaries or other providers) and `--all`.
+  - Add `install-kimi.ps1` for PowerShell installer parity.
+
 ## 0.2.2
 
 - Add `POST /v1/responses` compatibility for clients that use the OpenAI Responses API, including Android Studio.

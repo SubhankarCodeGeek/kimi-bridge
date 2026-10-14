@@ -1,10 +1,12 @@
 param(
-    [string]$BaseUrl = $env:KIMIBRIDGE_BASE_URL
+    [string]$BaseUrl = $env:KIMIBRIDGE_BASE_URL,
+    [int]$Port = 0
 )
 
 $Installer = Join-Path $PSScriptRoot "install.ps1"
-if ($BaseUrl) {
-    & $Installer -Provider deepseek -BaseUrl $BaseUrl @args
-} else {
-    & $Installer -Provider deepseek @args
+$splat = @{
+    Provider = "deepseek"
 }
+if ($BaseUrl) { $splat["BaseUrl"] = $BaseUrl }
+if ($Port -gt 0) { $splat["Port"] = $Port }
+& $Installer @splat @args

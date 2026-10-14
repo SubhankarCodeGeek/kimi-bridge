@@ -87,14 +87,27 @@ python3 -m kimibridge.cli setup all
 
 ### 🤖 Android Studio AI Assistant Setup
 
+With KimiBridge, you can run and configure **both DeepSeek and Kimi simultaneously** on separate local ports without any model list conflict:
+
+#### DeepSeek Provider:
 1. Open **Android Studio** ➔ **Settings** (or **Preferences** on macOS).
 2. Navigate to **Tools** ➔ **AI Assistant** (or **LLM Provider / Custom OpenAI Provider**).
 3. Select **OpenAI-compatible**.
-4. Set the fields as follows:
-   - **Base URL**: `http://127.0.0.1:5001/v1`
-   - **API Key**: *Your API Key for the active provider*
-   - **Model**: Click **Refresh** to select from discovered models (e.g. `deepseek-v3-pro`, `deepseek-chat`, or `kimi-k3`).
-5. Click **Apply / Test Connection**.
+4. Set the fields:
+   - **Base URL**: `http://127.0.0.1:5001/v1` *(or your configured DeepSeek port)*
+   - **API Key**: *Your DeepSeek API Key*
+5. Click **Refresh**: Populates with `deepseek-chat`, `deepseek-reasoner`, `deepseek-v3-pro`, `deepseek-flash`.
+6. Click **Apply**.
+
+#### Kimi / Moonshot Provider:
+1. Add a second custom OpenAI-compatible entry in Android Studio (or switch between profiles).
+2. Set the fields:
+   - **Base URL**: `http://127.0.0.1:5002/v1` *(or your configured Kimi port)*
+   - **API Key**: *Your Kimi / Moonshot API Key*
+3. Click **Refresh**: Populates with `kimi-k3`, `moonshot-v1-8k`, `moonshot-v1-32k`, etc.
+4. Click **Apply**.
+
+Both providers run independently in the background on separate ports. Refreshing models in one provider never overwrites or shows models from the other!
 
 ---
 

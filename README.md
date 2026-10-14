@@ -78,9 +78,14 @@ cd kimi-bridge && git pull origin main
 
 **Windows (PowerShell):**
 ```powershell
+# First-time installation:
 git clone https://github.com/SubhankarCodeGeek/kimi-bridge.git
 cd kimi-bridge
-.\installers\install.ps1 -Kimi
+.\installers\install-kimi.ps1
+
+# If you already cloned previously / updating:
+cd kimi-bridge; git pull origin main
+.\installers\install-kimi.ps1
 ```
 
 ---
@@ -93,67 +98,73 @@ Run the general installer to choose your provider interactively:
 
 ---
 
-> **Note:** The installer automatically registers KimiBridge as a background user service (`systemctl --user` on Linux, `launchd` on macOS, `Task Scheduler` on Windows) listening on `http://127.0.0.1:5001/v1`.
+> **Note:** The installer automatically registers KimiBridge as a background user service (`systemctl --user` on Linux, `launchd` on macOS, `Task Scheduler` on Windows).
+> **Multi-Provider Concurrent Hosting:** If you install both DeepSeek and Kimi, KimiBridge automatically assigns dedicated ports (e.g. DeepSeek on `5001` and Kimi on `5002`) and runs independent background services (`kimibridge-deepseek` and `kimibridge-kimi`). Neither service stops or overwrites the other!
 
 ---
 
 ### Step 2: Verify Host Service Health
 
-Run diagnostics to confirm the background gateway is running properly:
+Run diagnostics to inspect all active provider endpoints:
 
 ```bash
+# Check all configured endpoints and statuses
+python3 -m kimibridge.cli status
+
+# Run full health checks across all instances
 python3 -m kimibridge.cli doctor
 ```
 
-On Linux host machines, you can also manage and inspect the systemd user daemon directly:
+On Linux host machines, you can inspect each provider's background service individually:
 
 ```bash
 # Check systemd user service status
-systemctl --user status kimibridge
+systemctl --user status kimibridge-deepseek
+systemctl --user status kimibridge-kimi
 
 # View recent service logs
-python3 -m kimibridge.cli logs
-# or
-journalctl --user -u kimibridge -n 50 --no-pager
+python3 -m kimibridge.cli logs --provider deepseek
+python3 -m kimibridge.cli logs --provider kimi
 ```
 
 ---
 
 ### Step 3: Configure Android Studio
 
-1. Open **Android Studio** ➔ **Settings** (or **Preferences** on macOS) ➔ **Tools** ➔ **AI Assistant** (or Custom LLM Provider).
-2. Select **OpenAI-compatible**.
-3. Fill in:
-   - **Base URL**: `http://127.0.0.1:5001/v1`
-   - **API Key**: *Your Provider API Key* (e.g. your DeepSeek API key or Kimi API key)
-4. Click **Refresh** (or test connection):
-   - For **DeepSeek**: Dropdown automatically populates with `deepseek-chat`, `deepseek-reasoner`, `deepseek-v3-pro`, `deepseek-flash`.
-   - For **Kimi**: Dropdown automatically populates with `kimi-k3`, `moonshot-v1-8k`, `moonshot-v1-32k`, `moonshot-v1-128k`.
-5. Select your desired model and click **Apply**!
+You can configure **DeepSeek** and **Kimi** side-by-side as separate OpenAI-compatible providers in Android Studio:
+
+#### DeepSeek Configuration:
+1. Open **Android Studio** ➔ **Settings** ➔ **Tools** ➔ **AI Assistant** (or Custom Provider).
+2. Set **Base URL**: `http://127.0.0.1:5001/v1` *(or your assigned DeepSeek port)*.
+3. Set **API Key**: *Your DeepSeek API Key*.
+4. Click **Refresh**: Populates with `deepseek-chat`, `deepseek-reasoner`, `deepseek-v3-pro`, `deepseek-flash`.
+
+#### Kimi / Moonshot AI Configuration:
+1. In Android Studio, add a second OpenAI-compatible provider (or configure your Kimi entry).
+2. Set **Base URL**: `http://127.0.0.1:5002/v1` *(or your assigned Kimi port)*.
+3. Set **API Key**: *Your Kimi / Moonshot API Key*.
+4. Click **Refresh**: Populates with `kimi-k3`, `moonshot-v1-8k`, `moonshot-v1-32k`, etc.
+
+Both providers run concurrently in the background with zero port collisions and zero model dropdown cross-contamination!
 
 ---
 
-### Step 4: Switch Providers Anytime (No Reinstallation Needed!)
+### Step 4: Manage & Reconfigure Instances Anytime
 
-To switch between DeepSeek and Kimi at any time, run:
-
-```bash
-# Switch to DeepSeek
-python3 -m kimibridge.cli setup deepseek
-
-# Switch to Kimi
-python3 -m kimibridge.cli setup kimi
-
-# Expose both providers
-python3 -m kimibridge.cli setup all
-```
-
-This 1-step command automatically updates your endpoint configuration and restarts the background service. In Android Studio, simply click **Refresh** on the models dropdown.
-
-If you ever need to restart or manage the proxy service manually:
+You can adjust ports, upstream URLs, or restart instances anytime:
 
 ```bash
-python3 -m kimibridge.cli restart
+# Reconfigure or change ports
+python3 -m kimibridge.cli setup deepseek --port 5001
+python3 -m kimibridge.cli setup kimi --port 5002
+
+# Restart a specific provider
+python3 -m kimibridge.cli restart --provider deepseek
+python3 -m kimibridge.cli restart --provider kimi
+
+# View active configuration
+python3 -m kimibridge.cli config show --provider deepseek
+python3 -m kimibridge.cli config show --provider kimi
 ```
 
 ---
