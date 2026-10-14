@@ -46,6 +46,10 @@ def responses_request_to_chat_completions(payload: dict[str, Any]) -> dict[str, 
     if max_tokens is not None:
         chat_payload["max_tokens"] = max_tokens
 
+    reasoning = payload.get("reasoning")
+    if isinstance(reasoning, dict) and reasoning.get("effort") is not None:
+        chat_payload["reasoning_effort"] = reasoning["effort"]
+
     tools = _responses_tools_to_chat_tools(payload.get("tools"))
     if tools:
         chat_payload["tools"] = tools
@@ -143,7 +147,7 @@ def chat_stream_to_response_stream(
     message_id = f"msg_{uuid4().hex}"
     created_at = int(time.time())
     model = request.get("model")
-    sequence = 0
+    sequence = 1
     started = False
     text_parts: list[str] = []
     buffer = ""
@@ -171,7 +175,7 @@ def chat_stream_to_response_stream(
         "usage": None,
     }
 
-    yield _sse("response.created", response_shell, sequence)
+    yield _sse("response.created", {"type": "response.created", "response": response_shell}, sequence)
 
     for raw_chunk in chunks:
         buffer += raw_chunk.decode("utf-8", errors="replace")

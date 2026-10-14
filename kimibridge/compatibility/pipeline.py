@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from kimibridge.compatibility.model_aliases import normalize_model_aliases
 from kimibridge.compatibility.parameters import normalize_parameters
 from kimibridge.compatibility.profiles import (
     ProviderProfile,
@@ -36,4 +37,6 @@ def normalize_request(
 
     normalized = normalize_roles(payload, mode=mode, profile=profile)
     normalized = normalize_parameters(normalized, mode=mode, profile=profile)
+    if mode != "passthrough":
+        normalized = normalize_model_aliases(normalized, profile=profile)
     return normalized

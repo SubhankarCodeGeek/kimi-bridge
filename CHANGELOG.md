@@ -7,6 +7,8 @@
 - Translate upstream Chat Completions responses and SSE chunks back into Responses API JSON and streaming event shapes.
 - Prefer explicit model-family detection over stale configured base URLs to avoid sending Kimi and DeepSeek requests to the wrong provider.
 - Normalize upstream HTTP 403 responses as permission errors with clearer troubleshooting guidance.
+- Rewrite legacy DeepSeek model aliases such as `deepseek-chat`, `deepseek-reasoner`, `deepseek-v3`, and `deepseek-v3-pro` to current upstream model IDs before forwarding.
+- Map Responses API `reasoning.effort` to DeepSeek Chat Completions `reasoning_effort`.
 
 ## 0.2.1
 

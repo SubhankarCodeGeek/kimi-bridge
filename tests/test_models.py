@@ -37,6 +37,7 @@ class ModelTests(unittest.TestCase):
         self.assertIn("deepseek-reasoner", model_ids)
         self.assertIn("deepseek-v3-pro", model_ids)
         self.assertIn("deepseek-flash", model_ids)
+        self.assertIn("deepseek-v4-pro", model_ids)
 
     def test_normalized_models_for_openai_exposes_gpt_models(self) -> None:
         result = normalized_models(provider="openai")
@@ -57,13 +58,15 @@ class ModelTests(unittest.TestCase):
         model_ids = {m["id"] for m in result["data"]}  # type: ignore[union-attr]
 
         self.assertIn("deepseek-chat", model_ids)
+        self.assertIn("deepseek-flash", model_ids)
+        self.assertIn("deepseek-v4-pro", model_ids)
         self.assertIn("deepseek-v3-pro", model_ids)
         self.assertNotIn("kimi-k3", model_ids)
 
     def test_normalized_models_all_orders_deepseek_first_when_base_url_is_deepseek(self) -> None:
         result = normalized_models(provider="all", base_url="https://api.deepseek.com")
         models = result["data"]  # type: ignore[union-attr]
-        self.assertEqual(models[0]["id"], "deepseek-chat")
+        self.assertEqual(models[0]["id"], "deepseek-flash")
 
 
 if __name__ == "__main__":

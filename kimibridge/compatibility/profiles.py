@@ -45,12 +45,13 @@ DEEPSEEK_PROFILE = ProviderProfile(
     unsupported_parameters=frozenset({"metadata", "store"}),
     default_base_url="https://api.deepseek.com",
     default_models=(
+        {"id": "deepseek-flash", "object": "model", "owned_by": "deepseek"},
+        {"id": "deepseek-v4-pro", "object": "model", "owned_by": "deepseek"},
         {"id": "deepseek-chat", "object": "model", "owned_by": "deepseek"},
         {"id": "deepseek-reasoner", "object": "model", "owned_by": "deepseek"},
         {"id": "deepseek-v3", "object": "model", "owned_by": "deepseek"},
         {"id": "deepseek-v3-pro", "object": "model", "owned_by": "deepseek"},
         {"id": "deepseek-r1", "object": "model", "owned_by": "deepseek"},
-        {"id": "deepseek-flash", "object": "model", "owned_by": "deepseek"},
         {"id": "deepseek-coder", "object": "model", "owned_by": "deepseek"},
     ),
 )

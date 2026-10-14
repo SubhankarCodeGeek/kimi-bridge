@@ -313,6 +313,7 @@ class IntegrationTests(unittest.TestCase):
         self.assertEqual(forwarded["messages"][0]["role"], "system")
         self.assertEqual(forwarded["messages"][1]["content"], "Why did my build fail?")
         self.assertEqual(forwarded["max_tokens"], 256)
+        self.assertEqual(forwarded["reasoning_effort"], "low")
         self.assertEqual(forwarded["tools"][0]["function"]["name"], "read_file")
         self.assertNotIn("reasoning", forwarded)
 
@@ -395,6 +396,16 @@ class IntegrationTests(unittest.TestCase):
         self.assertIn('"delta": "hello"', body)
         self.assertIn("event: response.completed", body)
         self.assertIn("data: [DONE]", body)
+        created_event_data = next(
+            line.removeprefix("data: ")
+            for line in body.splitlines()
+            if line.startswith("data: {") and '"type": "response.created"' in line
+        )
+        created_event = json.loads(created_event_data)
+        self.assertEqual(created_event["type"], "response.created")
+        self.assertEqual(created_event["sequence_number"], 1)
+        self.assertEqual(created_event["response"]["object"], "response")
+        self.assertEqual(created_event["response"]["status"], "in_progress")
         self.assertIsNotNone(MockStreamUpstreamHandler.received)
         assert MockStreamUpstreamHandler.received is not None
         self.assertEqual(MockStreamUpstreamHandler.received["path"], "/v1/chat/completions")

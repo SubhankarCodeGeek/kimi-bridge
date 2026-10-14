@@ -75,6 +75,35 @@ Update KimiBridge and restart the background service. Current versions translate
 
 ---
 
+## DeepSeek: HTTP 400 with `deepseek-v3`, `deepseek-v3-pro`, or `deepseek-reasoner`
+
+### Symptom:
+Requests fail with an upstream HTTP 400 after selecting a DeepSeek model such as:
+
+```text
+deepseek-v3
+deepseek-v3-pro
+deepseek-reasoner
+deepseek-chat
+```
+
+### Cause:
+The current DeepSeek API accepts `deepseek-flash` and `deepseek-v4-pro` as model IDs. Older IDE configs and dropdown entries may still use legacy or marketing-style names such as `deepseek-v3-pro`.
+
+### Fix:
+Update KimiBridge and restart the background service. Current versions keep the legacy names visible for client compatibility, but rewrite them before forwarding upstream:
+
+```text
+deepseek-chat      -> deepseek-flash
+deepseek-reasoner  -> deepseek-flash + reasoning_effort=high
+deepseek-v3        -> deepseek-flash
+deepseek-v3-pro    -> deepseek-v4-pro
+```
+
+For new configurations, prefer selecting `deepseek-flash` or `deepseek-v4-pro` directly.
+
+---
+
 ## HTTP 403 with Kimi / Moonshot
 
 ### Symptom:

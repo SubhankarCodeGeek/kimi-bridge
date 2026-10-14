@@ -29,6 +29,41 @@ class PipelineTests(unittest.TestCase):
         result = normalize_request(payload)
 
         self.assertEqual(result["messages"][0]["role"], "system")
+        self.assertEqual(result["model"], "deepseek-flash")
+        self.assertNotIn("reasoning_effort", result)
+
+    def test_pipeline_maps_deepseek_reasoner_alias_to_flash_with_reasoning(self) -> None:
+        payload = {
+            "model": "deepseek-reasoner",
+            "messages": [{"role": "user", "content": "Think carefully."}],
+        }
+
+        result = normalize_request(payload)
+
+        self.assertEqual(result["model"], "deepseek-flash")
+        self.assertEqual(result["reasoning_effort"], "high")
+
+    def test_pipeline_maps_deepseek_v3_pro_alias_to_current_pro_model(self) -> None:
+        payload = {
+            "model": "deepseek-v3-pro",
+            "messages": [{"role": "user", "content": "Use the pro model."}],
+        }
+
+        result = normalize_request(payload)
+
+        self.assertEqual(result["model"], "deepseek-v4-pro")
+
+    def test_pipeline_preserves_current_deepseek_model_and_reasoning_effort(self) -> None:
+        payload = {
+            "model": "deepseek-flash",
+            "reasoning_effort": "low",
+            "messages": [{"role": "user", "content": "Use light reasoning."}],
+        }
+
+        result = normalize_request(payload)
+
+        self.assertEqual(result["model"], "deepseek-flash")
+        self.assertEqual(result["reasoning_effort"], "low")
 
     def test_pipeline_preserves_developer_role_for_openai(self) -> None:
         payload = {
@@ -65,12 +100,14 @@ class PipelineTests(unittest.TestCase):
 
     def test_passthrough_mode_preserves_request_shape_and_roles(self) -> None:
         payload = {
+            "model": "deepseek-chat",
             "parallel_tool_calls": True,
             "messages": [{"role": "developer", "content": "Stay untouched."}],
         }
 
         result = normalize_request(payload, mode="passthrough")
 
+        self.assertEqual(result["model"], "deepseek-chat")
         self.assertEqual(result["messages"][0]["role"], "developer")
         self.assertIn("parallel_tool_calls", result)
 
