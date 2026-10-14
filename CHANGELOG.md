@@ -9,6 +9,7 @@
 - Normalize upstream HTTP 403 responses as permission errors with clearer troubleshooting guidance.
 - Rewrite legacy DeepSeek model aliases such as `deepseek-chat`, `deepseek-reasoner`, `deepseek-v3`, and `deepseek-v3-pro` to current upstream model IDs before forwarding.
 - Map Responses API `reasoning.effort` to DeepSeek Chat Completions `reasoning_effort`.
+- Fall back to DeepSeek `reasoning_content` when a successful response contains no final `content`, preventing blank generated responses in strict clients.
 
 ## 0.2.1
 

@@ -104,6 +104,19 @@ For new configurations, prefer selecting `deepseek-flash` or `deepseek-v4-pro` d
 
 ---
 
+## DeepSeek: Generated Status but No Output
+
+### Symptom:
+When using KimiBridge, Android Studio shows the model as generating or generated, but no assistant text appears.
+
+### Cause:
+DeepSeek can return thinking output in `reasoning_content` before or instead of final `content`. Older KimiBridge versions only translated `content` into Responses API `output_text`, so a successful HTTP 200 stream could complete with an empty visible answer.
+
+### Fix:
+Update KimiBridge and restart the background service. Current versions use `reasoning_content` as a fallback visible output when final `content` is empty.
+
+---
+
 ## HTTP 403 with Kimi / Moonshot
 
 ### Symptom:

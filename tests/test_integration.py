@@ -411,6 +411,79 @@ class IntegrationTests(unittest.TestCase):
         self.assertEqual(MockStreamUpstreamHandler.received["path"], "/v1/chat/completions")
         self.assertTrue(MockStreamUpstreamHandler.received["payload"]["stream"])
 
+    def test_responses_api_uses_reasoning_content_when_content_is_empty(self) -> None:
+        try:
+            upstream_port = free_port()
+            proxy_port = free_port()
+        except (PermissionError, OSError):
+            self.skipTest("Local sockets are not permitted in this environment.")
+
+        MockReasoningOnlyUpstreamHandler.received = None
+        upstream = ThreadingHTTPServer(("127.0.0.1", upstream_port), MockReasoningOnlyUpstreamHandler)
+        config = AppConfig(
+            server=ServerConfig(port=proxy_port),
+            kimi=KimiConfig(base_url=f"http://127.0.0.1:{upstream_port}"),
+            provider="deepseek",
+        )
+        proxy = QuietKimiBridgeServer(("127.0.0.1", proxy_port), config)
+
+        payload = {
+            "model": "deepseek-flash",
+            "input": "reasoning-only response",
+            "stream": False,
+        }
+        request = Request(
+            f"http://127.0.0.1:{proxy_port}/v1/responses",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+
+        with running_server(upstream):
+            with running_server(proxy):
+                with urlopen(request, timeout=TEST_TIMEOUT) as response:
+                    result = json.loads(response.read().decode("utf-8"))
+
+        self.assertEqual(result["output_text"], "reasoning fallback")
+        self.assertEqual(result["output"][0]["content"][0]["text"], "reasoning fallback")
+
+    def test_responses_api_streaming_uses_reasoning_content_when_content_is_empty(self) -> None:
+        try:
+            upstream_port = free_port()
+            proxy_port = free_port()
+        except (PermissionError, OSError):
+            self.skipTest("Local sockets are not permitted in this environment.")
+
+        MockReasoningOnlyStreamUpstreamHandler.received = None
+        upstream = ThreadingHTTPServer(("127.0.0.1", upstream_port), MockReasoningOnlyStreamUpstreamHandler)
+        config = AppConfig(
+            server=ServerConfig(port=proxy_port),
+            kimi=KimiConfig(base_url=f"http://127.0.0.1:{upstream_port}"),
+            provider="deepseek",
+        )
+        proxy = QuietKimiBridgeServer(("127.0.0.1", proxy_port), config)
+
+        payload = {
+            "model": "deepseek-flash",
+            "input": "stream reasoning-only response",
+            "stream": True,
+        }
+        request = Request(
+            f"http://127.0.0.1:{proxy_port}/v1/responses",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+
+        with running_server(upstream):
+            with running_server(proxy):
+                with urlopen(request, timeout=TEST_TIMEOUT) as response:
+                    body = response.read().decode("utf-8")
+
+        self.assertIn("event: response.output_text.delta", body)
+        self.assertIn('"delta": "reasoning fallback"', body)
+        self.assertIn('"output_text": "reasoning fallback"', body)
+
     def test_chat_completion_fallback_when_primary_fails(self) -> None:
         try:
             dead_primary_port = free_port()
@@ -640,6 +713,71 @@ class MockStreamUpstreamHandler(BaseHTTPRequestHandler):
         self.send_header("Connection", "close")
         self.end_headers()
         self.wfile.write(b'data: {"choices": [{"delta": {"content": "hello"}}]}\n\n')
+        self.wfile.flush()
+        self.wfile.write(b"data: [DONE]\n\n")
+        self.wfile.flush()
+
+
+class MockReasoningOnlyUpstreamHandler(BaseHTTPRequestHandler):
+    received: dict[str, Any] | None = None
+
+    def log_message(self, format: str, *args: Any) -> None:
+        return
+
+    def do_POST(self) -> None:
+        length = int(self.headers.get("Content-Length", "0"))
+        body = self.rfile.read(length)
+        type(self).received = {
+            "path": self.path,
+            "headers": dict(self.headers.items()),
+            "payload": json.loads(body.decode("utf-8")),
+        }
+
+        response = {
+            "id": "chatcmpl-reasoning-only-test",
+            "object": "chat.completion",
+            "choices": [
+                {
+                    "index": 0,
+                    "message": {
+                        "role": "assistant",
+                        "content": "",
+                        "reasoning_content": "reasoning fallback",
+                    },
+                    "finish_reason": "stop",
+                }
+            ],
+        }
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        encoded = json.dumps(response).encode("utf-8")
+        self.send_header("Content-Length", str(len(encoded)))
+        self.end_headers()
+        self.wfile.write(encoded)
+
+
+class MockReasoningOnlyStreamUpstreamHandler(BaseHTTPRequestHandler):
+    received: dict[str, Any] | None = None
+
+    def log_message(self, format: str, *args: Any) -> None:
+        return
+
+    def do_POST(self) -> None:
+        length = int(self.headers.get("Content-Length", "0"))
+        body = self.rfile.read(length)
+        type(self).received = {
+            "path": self.path,
+            "headers": dict(self.headers.items()),
+            "payload": json.loads(body.decode("utf-8")),
+        }
+
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Connection", "close")
+        self.end_headers()
+        self.wfile.write(
+            b'data: {"choices": [{"delta": {"reasoning_content": "reasoning fallback"}}]}\n\n'
+        )
         self.wfile.flush()
         self.wfile.write(b"data: [DONE]\n\n")
         self.wfile.flush()

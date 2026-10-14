@@ -67,6 +67,7 @@ def chat_completion_to_response(chat_completion: dict[str, Any], request: dict[s
     model = chat_completion.get("model") or request.get("model")
     output: list[dict[str, Any]] = []
     output_text_parts: list[str] = []
+    reasoning_text_parts: list[str] = []
 
     for choice in chat_completion.get("choices", []):
         if not isinstance(choice, dict):
@@ -96,6 +97,12 @@ def chat_completion_to_response(chat_completion: dict[str, Any], request: dict[s
                     }
                 )
 
+        reasoning_content = message.get("reasoning_content")
+        if reasoning_content:
+            reasoning_text = _content_to_text(reasoning_content)
+            if reasoning_text:
+                reasoning_text_parts.append(reasoning_text)
+
         for tool_call in message.get("tool_calls") or []:
             if not isinstance(tool_call, dict):
                 continue
@@ -111,6 +118,25 @@ def chat_completion_to_response(chat_completion: dict[str, Any], request: dict[s
                     "arguments": function.get("arguments", ""),
                 }
             )
+
+    if not output_text_parts and reasoning_text_parts:
+        text = "".join(reasoning_text_parts)
+        output_text_parts.append(text)
+        output.append(
+            {
+                "id": f"msg_{uuid4().hex}",
+                "type": "message",
+                "status": "completed",
+                "role": "assistant",
+                "content": [
+                    {
+                        "type": "output_text",
+                        "text": text,
+                        "annotations": [],
+                    }
+                ],
+            }
+        )
 
     usage = _responses_usage(chat_completion.get("usage"))
     return {
@@ -150,6 +176,7 @@ def chat_stream_to_response_stream(
     sequence = 1
     started = False
     text_parts: list[str] = []
+    reasoning_parts: list[str] = []
     buffer = ""
 
     response_shell = {
@@ -190,6 +217,7 @@ def chat_stream_to_response_stream(
                     response_id,
                     message_id,
                     text_parts,
+                    reasoning_parts,
                     sequence + 1,
                     started,
                 )
@@ -203,6 +231,9 @@ def chat_stream_to_response_stream(
             if not delta:
                 continue
             text_delta = _content_to_text(delta.get("content"))
+            reasoning_delta = _content_to_text(delta.get("reasoning_content"))
+            if reasoning_delta:
+                reasoning_parts.append(reasoning_delta)
             if not text_delta:
                 continue
             if not started:
@@ -249,7 +280,15 @@ def chat_stream_to_response_stream(
                 sequence,
             )
 
-    yield from _finish_response_stream(response_shell, response_id, message_id, text_parts, sequence + 1, started)
+    yield from _finish_response_stream(
+        response_shell,
+        response_id,
+        message_id,
+        text_parts,
+        reasoning_parts,
+        sequence + 1,
+        started,
+    )
 
 
 def _instructions_to_messages(instructions: Any) -> list[dict[str, Any]]:
@@ -422,10 +461,54 @@ def _finish_response_stream(
     response_id: str,
     message_id: str,
     text_parts: list[str],
+    reasoning_parts: list[str],
     sequence: int,
     started: bool,
 ) -> Iterator[bytes]:
     text = "".join(text_parts)
+    if not text and reasoning_parts:
+        text = "".join(reasoning_parts)
+        started = True
+        yield _sse(
+            "response.output_item.added",
+            {
+                "type": "response.output_item.added",
+                "output_index": 0,
+                "item": {
+                    "id": message_id,
+                    "type": "message",
+                    "status": "in_progress",
+                    "role": "assistant",
+                    "content": [],
+                },
+            },
+            sequence,
+        )
+        sequence += 1
+        yield _sse(
+            "response.content_part.added",
+            {
+                "type": "response.content_part.added",
+                "item_id": message_id,
+                "output_index": 0,
+                "content_index": 0,
+                "part": {"type": "output_text", "text": "", "annotations": []},
+            },
+            sequence,
+        )
+        sequence += 1
+        yield _sse(
+            "response.output_text.delta",
+            {
+                "type": "response.output_text.delta",
+                "item_id": message_id,
+                "output_index": 0,
+                "content_index": 0,
+                "delta": text,
+            },
+            sequence,
+        )
+        sequence += 1
     if started:
         yield _sse(
             "response.output_text.done",
