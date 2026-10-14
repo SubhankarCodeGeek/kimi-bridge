@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import replace
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
@@ -12,6 +13,11 @@ from kimibridge.compatibility import (
     normalize_error,
     normalize_request,
     normalized_models,
+)
+from kimibridge.compatibility.responses import (
+    chat_completion_to_response,
+    chat_stream_to_response_stream,
+    responses_request_to_chat_completions,
 )
 from kimibridge.config import AppConfig, default_config_path, load_config
 from kimibridge.upstream import KimiUpstreamClient, UpstreamHttpError, UpstreamUnavailable
@@ -103,16 +109,21 @@ class KimiBridgeHandler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         path = urlparse(self.path).path
 
-        if path != "/v1/chat/completions":
+        if path not in {"/v1/chat/completions", "/v1/responses"}:
             self._send_json(404, {"error": {"message": "Not found"}})
             return
 
+        is_responses_request = path == "/v1/responses"
         config = self._get_config()
         try:
             payload = self._read_json()
         except ValueError as exc:
             self._send_json(400, {"error": {"message": str(exc)}})
             return
+
+        original_payload = payload
+        if is_responses_request:
+            payload = responses_request_to_chat_completions(payload)
 
         headers = self._forward_headers()
         model = payload.get("model") if isinstance(payload, dict) else None
@@ -151,13 +162,19 @@ class KimiBridgeHandler(BaseHTTPRequestHandler):
                         content_type = stream_resp.headers.get("Content-Type", "text/event-stream")
                         self.send_response(stream_resp.status)
                         self._add_cors_headers()
-                        self.send_header("Content-Type", content_type)
+                        self.send_header(
+                            "Content-Type",
+                            "text/event-stream" if is_responses_request else content_type,
+                        )
                         self.send_header("Cache-Control", "no-cache")
                         self.send_header("Connection", "close")
                         self.end_headers()
 
                         try:
-                            for chunk in stream_resp.iter_chunks():
+                            chunks = stream_resp.iter_chunks()
+                            if is_responses_request:
+                                chunks = chat_stream_to_response_stream(chunks, original_payload)
+                            for chunk in chunks:
                                 self.wfile.write(chunk)
                                 self.wfile.flush()
                         except (BrokenPipeError, ConnectionResetError, OSError):
@@ -192,6 +209,13 @@ class KimiBridgeHandler(BaseHTTPRequestHandler):
         for idx, client in enumerate(clients_to_try):
             try:
                 response = client.chat_completions(headers, upstream_payload)
+                if is_responses_request:
+                    response_payload = json.loads(response.body.decode("utf-8"))
+                    body = json.dumps(
+                        chat_completion_to_response(response_payload, original_payload)
+                    ).encode("utf-8")
+                    self._send_raw(response.status, body, "application/json")
+                    return
                 self._send_raw(
                     response.status,
                     response.body,

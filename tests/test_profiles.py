@@ -74,6 +74,26 @@ class ProfileTests(unittest.TestCase):
             "deepseek",
         )
 
+    def test_detect_provider_prioritizes_kimi_model_over_stale_deepseek_base_url(self) -> None:
+        self.assertEqual(
+            detect_provider(
+                model="kimi-k3",
+                base_url="https://api.deepseek.com",
+                configured_provider="all",
+            ).name,
+            "kimi",
+        )
+
+    def test_detect_provider_prioritizes_deepseek_model_over_stale_kimi_base_url(self) -> None:
+        self.assertEqual(
+            detect_provider(
+                model="deepseek-chat",
+                base_url="https://api.moonshot.ai",
+                configured_provider="all",
+            ).name,
+            "deepseek",
+        )
+
     def test_get_provider_profile_fallback(self) -> None:
         self.assertEqual(get_provider_profile("unknown-provider").name, "generic")
         self.assertEqual(get_provider_profile(None).name, "kimi")

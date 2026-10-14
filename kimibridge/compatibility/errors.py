@@ -9,6 +9,11 @@ def normalize_error(status: int, body: bytes) -> dict[str, Any]:
     error_type = "invalid_request_error" if status in {400, 422} else "upstream_error"
     code = "invalid_parameters" if status == 422 else None
 
+    if status in {401, 403}:
+        message = "Upstream authentication or permission error"
+        error_type = "authentication_error" if status == 401 else "permission_error"
+        code = "upstream_auth_error" if status == 401 else "upstream_permission_denied"
+
     try:
         payload = json.loads(body.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError):
@@ -40,6 +45,12 @@ def normalize_error(status: int, body: bytes) -> dict[str, Any]:
                 message = str(raw_detail)
         elif "message" in payload:
             message = str(payload["message"])
+
+    if status == 403 and message == "Upstream authentication or permission error":
+        message = (
+            "Upstream returned 403 Forbidden. Check that the API key belongs to the configured "
+            "provider and that the base URL matches the key issuer."
+        )
 
     return {
         "error": {

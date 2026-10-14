@@ -26,6 +26,20 @@ class ErrorTests(unittest.TestCase):
         self.assertEqual(result["error"]["message"], "Upstream error")
         self.assertEqual(result["error"]["code"], "upstream_http_500")
 
+    def test_normalizes_403_as_permission_error(self) -> None:
+        result = normalize_error(403, b'{"error":{"message":"Forbidden"}}')
+
+        self.assertEqual(result["error"]["message"], "Forbidden")
+        self.assertEqual(result["error"]["type"], "permission_error")
+        self.assertEqual(result["error"]["code"], "upstream_permission_denied")
+
+    def test_403_without_json_gets_actionable_message(self) -> None:
+        result = normalize_error(403, b"<html>forbidden</html>")
+
+        self.assertEqual(result["error"]["type"], "permission_error")
+        self.assertEqual(result["error"]["code"], "upstream_permission_denied")
+        self.assertIn("base URL matches the key issuer", result["error"]["message"])
+
     def test_normalizes_deepseek_422_detail_error(self) -> None:
         body = (
             b'{"detail":"Failed to deserialize the JSON body into the target type: '

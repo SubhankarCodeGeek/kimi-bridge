@@ -13,6 +13,7 @@ KimiBridge provides a standard OpenAI-compatible API gateway (`127.0.0.1:5001/v1
 | **`store` & `metadata`** | ✅ Supported | ❌ Unrecognized | ❌ Unrecognized | 🧹 Stripped in `compatible` mode |
 | **SSE Streaming** | ✅ Supported | ✅ Supported | ✅ Supported | ⚡ Zero-latency line-by-line forwarding |
 | **Model Listing (`/v1/models`)** | ✅ Standard | ⚠️ Moonshot ID list | ⚠️ DeepSeek ID list | 📋 Standard OpenAI model objects |
+| **Responses API (`/v1/responses`)** | ✅ Supported | ❌ Chat endpoint only | ❌ Chat endpoint only | 🔁 Translated to/from Chat Completions |
 
 ---
 
@@ -20,7 +21,7 @@ KimiBridge provides a standard OpenAI-compatible API gateway (`127.0.0.1:5001/v1
 
 | Client / Tool | Compatibility Mode | Status | Notes |
 |---------------|-------------------|--------|-------|
-| **Android Studio AI Assistant** | `compatible` (default) | ✅ Fully Supported | Auto-normalizes `developer` role to `system` and purges unsupported parameters (`parallel_tool_calls`, `store`). |
+| **Android Studio AI Assistant** | `compatible` (default) | ✅ Fully Supported | Supports `/v1/responses`, auto-normalizes `developer` role to `system`, and purges unsupported parameters (`parallel_tool_calls`, `store`). |
 | **Cursor / VS Code Extensions** | `compatible` | ✅ Fully Supported | Real-time SSE streaming (`stream: true`) and standard completions supported. |
 | **Aider CLI** | `compatible` / `strict` | ✅ Fully Supported | Custom base URL `http://127.0.0.1:5001/v1` supported. |
 | **Open WebUI** | `compatible` | ✅ Fully Supported | Full CORS preflight support enabled. |

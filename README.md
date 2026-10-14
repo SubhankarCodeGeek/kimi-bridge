@@ -14,6 +14,7 @@
 
 - ⚡ **Zero-Latency SSE Streaming**: Supports real-time streaming (`stream: true`) line-by-line forwarding.
 - 🧩 **Provider-Aware Compatibility**: Adapts requests to target provider profiles (e.g. **Kimi / Moonshot**, **DeepSeek**, **OpenAI**).
+- 🔁 **Responses API Bridge**: Supports `POST /v1/responses` by translating Responses requests to upstream Chat Completions and translating results back.
 - 🛠️ **Role Normalization**: Maps unsupported OpenAI `developer` role messages to `system` role when targeting strict providers like Kimi or DeepSeek.
 - 🧹 **Payload Cleaning**: Filters out unsupported parameters (`parallel_tool_calls`, `store`, `metadata`).
 - 🌐 **CORS Support**: Full preflight (`OPTIONS`) support for web tools and browser extensions.
@@ -226,7 +227,8 @@ For full details, see the [User Guide](docs/user_guide.md).
                              ▼
                     ┌──────────────────┐
                     │    KimiBridge    │
-                    │   HTTP Gateway   │
+                    │ /v1/chat + /v1/  │
+                    │    responses     │
                     └────────┬─────────┘
                              │
                              ▼

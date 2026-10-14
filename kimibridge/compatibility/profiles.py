@@ -113,15 +113,6 @@ def detect_provider(
             if k.lower() in {"x-bridge-provider", "x-provider"}:
                 return get_provider_profile(v)
 
-    if base_url:
-        u = base_url.lower()
-        if "deepseek.com" in u:
-            return DEEPSEEK_PROFILE
-        if "moonshot.ai" in u:
-            return KIMI_PROFILE
-        if "openai.com" in u:
-            return OPENAI_PROFILE
-
     if model:
         m = model.lower()
         if "deepseek" in m:
@@ -129,6 +120,15 @@ def detect_provider(
         if "kimi" in m or "moonshot" in m:
             return KIMI_PROFILE
         if m.startswith("gpt-") or m.startswith("o1") or m.startswith("o3"):
+            return OPENAI_PROFILE
+
+    if base_url:
+        u = base_url.lower()
+        if "deepseek.com" in u:
+            return DEEPSEEK_PROFILE
+        if "moonshot.ai" in u:
+            return KIMI_PROFILE
+        if "openai.com" in u:
             return OPENAI_PROFILE
 
     if configured_provider and configured_provider.lower() not in {"auto", "default", "all"}:

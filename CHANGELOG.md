@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.2
+
+- Add `POST /v1/responses` compatibility for clients that use the OpenAI Responses API, including Android Studio.
+- Translate Responses `input`, `instructions`, `max_output_tokens`, function tools, and streaming requests into upstream Chat Completions requests.
+- Translate upstream Chat Completions responses and SSE chunks back into Responses API JSON and streaming event shapes.
+- Prefer explicit model-family detection over stale configured base URLs to avoid sending Kimi and DeepSeek requests to the wrong provider.
+- Normalize upstream HTTP 403 responses as permission errors with clearer troubleshooting guidance.
+
 ## 0.2.1
 
 - Add dedicated `kimibridge setup <provider>` and `kimibridge use <provider>` commands for 1-step switching (e.g. `setup deepseek`, `setup kimi`, `setup all`).

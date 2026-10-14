@@ -55,6 +55,56 @@ Route requests through KimiBridge at `http://127.0.0.1:5001/v1`. KimiBridge inte
 
 ---
 
+## Android Studio: `useResponsesAPI=true` then `404 Not found`
+
+### Symptom:
+Android Studio logs show a request failure similar to:
+
+```text
+OpenAI streamGenerateContent failed
+with flags: [streaming=true, useResponsesAPI=true, reasoningEffort=true]
+Falling back to Completion API. Error: 404: Not found
+No ModelResponse at all
+```
+
+### Cause:
+The client is calling `POST /v1/responses`. Older KimiBridge versions only implemented `GET /v1/models` and `POST /v1/chat/completions`, so model discovery could work while inference failed.
+
+### Fix:
+Update KimiBridge and restart the background service. Current versions translate `POST /v1/responses` into the upstream Chat Completions schema, then translate the completion or stream events back into Responses API format.
+
+---
+
+## HTTP 403 with Kimi / Moonshot
+
+### Symptom:
+Requests through KimiBridge fail with:
+
+```text
+403 Forbidden
+```
+
+or an OpenAI-style error whose code is `upstream_permission_denied`.
+
+### Common causes:
+
+- The API key does not belong to the configured provider. Moonshot Open Platform keys and other Kimi/Kimi Code credentials are not interchangeable.
+- The configured base URL is stale after switching providers. For the Moonshot Open Platform, use `https://api.moonshot.ai` or `https://api.moonshot.ai/v1`; KimiBridge normalizes either form internally.
+- Android Studio is still sending a model from another provider after a provider switch. Refresh the model list and select a `kimi-*` or `moonshot-*` model for Kimi.
+- The account or key does not have permission for the selected model.
+
+### Fix:
+
+```bash
+python3 -m kimibridge.cli setup kimi
+python3 -m kimibridge.cli restart
+python3 -m kimibridge.cli config show
+```
+
+Then use your Moonshot/Kimi API key in the client and refresh the model dropdown.
+
+---
+
 ## Model Dropdown Showing Outdated Models
 
 If Android Studio displays models from another provider (e.g. `kimi-k3` instead of DeepSeek models):

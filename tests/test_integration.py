@@ -252,6 +252,70 @@ class IntegrationTests(unittest.TestCase):
             "Bearer test-key",
         )
 
+    def test_responses_api_forwards_as_normalized_chat_completion(self) -> None:
+        try:
+            upstream_port = free_port()
+            proxy_port = free_port()
+        except (PermissionError, OSError):
+            self.skipTest("Local sockets are not permitted in this environment.")
+
+        MockUpstreamHandler.received = None
+        upstream = ThreadingHTTPServer(("127.0.0.1", upstream_port), MockUpstreamHandler)
+        config = AppConfig(
+            server=ServerConfig(port=proxy_port),
+            kimi=KimiConfig(base_url=f"http://127.0.0.1:{upstream_port}"),
+            provider="deepseek",
+        )
+        proxy = QuietKimiBridgeServer(("127.0.0.1", proxy_port), config)
+
+        payload = {
+            "model": "deepseek-reasoner",
+            "instructions": "Answer like an Android coding assistant.",
+            "input": [
+                {
+                    "type": "message",
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": "Why did my build fail?"}],
+                }
+            ],
+            "max_output_tokens": 256,
+            "reasoning": {"effort": "low"},
+            "stream": False,
+            "tools": [
+                {
+                    "type": "function",
+                    "name": "read_file",
+                    "description": "Read a file",
+                    "parameters": {"type": "object"},
+                }
+            ],
+        }
+        request = Request(
+            f"http://127.0.0.1:{proxy_port}/v1/responses",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+
+        with running_server(upstream):
+            with running_server(proxy):
+                with urlopen(request, timeout=TEST_TIMEOUT) as response:
+                    result = json.loads(response.read().decode("utf-8"))
+
+        self.assertEqual(result["object"], "response")
+        self.assertEqual(result["output_text"], "hello")
+        self.assertEqual(result["output"][0]["content"][0]["text"], "hello")
+        self.assertIsNotNone(MockUpstreamHandler.received)
+        assert MockUpstreamHandler.received is not None
+        self.assertEqual(MockUpstreamHandler.received["path"], "/v1/chat/completions")
+        forwarded = MockUpstreamHandler.received["payload"]
+        self.assertEqual(forwarded["model"], "deepseek-reasoner")
+        self.assertEqual(forwarded["messages"][0]["role"], "system")
+        self.assertEqual(forwarded["messages"][1]["content"], "Why did my build fail?")
+        self.assertEqual(forwarded["max_tokens"], 256)
+        self.assertEqual(forwarded["tools"][0]["function"]["name"], "read_file")
+        self.assertNotIn("reasoning", forwarded)
+
     def test_chat_completion_streaming(self) -> None:
         try:
             upstream_port = free_port()
@@ -289,6 +353,51 @@ class IntegrationTests(unittest.TestCase):
         self.assertIn("data: [DONE]", body)
         self.assertIsNotNone(MockStreamUpstreamHandler.received)
         assert MockStreamUpstreamHandler.received is not None
+        self.assertTrue(MockStreamUpstreamHandler.received["payload"]["stream"])
+
+    def test_responses_api_streaming_translates_chat_sse(self) -> None:
+        try:
+            upstream_port = free_port()
+            proxy_port = free_port()
+        except (PermissionError, OSError):
+            self.skipTest("Local sockets are not permitted in this environment.")
+
+        MockStreamUpstreamHandler.received = None
+        upstream = ThreadingHTTPServer(("127.0.0.1", upstream_port), MockStreamUpstreamHandler)
+        config = AppConfig(
+            server=ServerConfig(port=proxy_port),
+            kimi=KimiConfig(base_url=f"http://127.0.0.1:{upstream_port}"),
+            provider="deepseek",
+        )
+        proxy = QuietKimiBridgeServer(("127.0.0.1", proxy_port), config)
+
+        payload = {
+            "model": "deepseek-reasoner",
+            "input": "stream from responses",
+            "stream": True,
+        }
+        request = Request(
+            f"http://127.0.0.1:{proxy_port}/v1/responses",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+
+        with running_server(upstream):
+            with running_server(proxy):
+                with urlopen(request, timeout=TEST_TIMEOUT) as response:
+                    body = response.read().decode("utf-8")
+                    content_type = response.headers.get("Content-Type")
+
+        self.assertIn("text/event-stream", content_type or "")
+        self.assertIn("event: response.created", body)
+        self.assertIn("event: response.output_text.delta", body)
+        self.assertIn('"delta": "hello"', body)
+        self.assertIn("event: response.completed", body)
+        self.assertIn("data: [DONE]", body)
+        self.assertIsNotNone(MockStreamUpstreamHandler.received)
+        assert MockStreamUpstreamHandler.received is not None
+        self.assertEqual(MockStreamUpstreamHandler.received["path"], "/v1/chat/completions")
         self.assertTrue(MockStreamUpstreamHandler.received["payload"]["stream"])
 
     def test_chat_completion_fallback_when_primary_fails(self) -> None:
