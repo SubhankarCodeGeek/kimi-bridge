@@ -40,9 +40,33 @@ jobs:
             dist/studiorelay-*
             dist/kimibridge-*
 
+  build-packages:
+    name: Build Python Wheels & Sdist
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build dependencies
+        run: python -m pip install --upgrade build
+
+      - name: Build package distributions
+        run: python -m build
+
+      - name: Upload Python Package Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-package
+          path: dist/
+
   publish-release:
     name: Publish GitHub Release
-    needs: build-binaries
+    needs: [build-binaries, build-packages]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -61,9 +85,30 @@ jobs:
           mkdir -p final-dist
           find release-artifacts -type f -exec cp {} final-dist/ \;
           cd final-dist
-          sha256sum studiorelay-* kimibridge-* 2>/dev/null > SHA256SUMS.txt || sha256sum * > SHA256SUMS.txt
+          sha256sum * > SHA256SUMS.txt
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           files: final-dist/*
+
+  publish-pypi:
+    name: Publish to PyPI
+    needs: [build-packages, publish-release]
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/studiorelay
+    permissions:
+      id-token: write
+    steps:
+      - name: Download Python Package
+        uses: actions/download-artifact@v4
+        with:
+          name: python-package
+          path: dist/
+
+      - name: Publish to PyPI via Trusted Publishing
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
