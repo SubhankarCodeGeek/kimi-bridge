@@ -120,7 +120,72 @@ StudioRelay acts as a transparent, high-performance local proxy:
 
 ## Installation
 
-### Recommended: 1-Step Setup for DeepSeek
+### Method 1: Install via PyPI (Recommended & Fastest)
+
+Install the latest release directly using `pip` or `pipx`:
+
+```bash
+pip install studiorelay
+# or using pipx (isolated application environment):
+pipx install studiorelay
+```
+
+#### What you'll see after installation:
+Verify that the CLI is ready:
+```bash
+$ studiorelay --version
+StudioRelay 0.3.0
+
+$ studiorelay --help
+usage: studiorelay {start,setup,use,doctor,status,stop,restart,logs,config,migrate,uninstall} ...
+```
+
+#### Next steps for the user:
+
+1. **Configure your target provider:**
+   ```bash
+   # For DeepSeek (default port: 5001):
+   studiorelay setup deepseek
+
+   # For Kimi / Moonshot (default port: 5002):
+   studiorelay setup kimi
+   ```
+   **Terminal Output:**
+   ```
+   StudioRelay configured for provider: DEEPSEEK
+     Target Provider:   deepseek
+     Upstream Base URL: https://api.deepseek.com
+     Proxy Endpoint:    http://127.0.0.1:5001/v1
+     Saved to:          ~/.studiorelay/config-deepseek.json
+     Available Models:  deepseek-flash, deepseek-v4-pro, deepseek-chat, deepseek-reasoner, deepseek-v3, deepseek-v3-pro...
+
+   In Android Studio / Cursor / Aider:
+     1. Set Base URL: http://127.0.0.1:5001/v1
+     2. Enter your DeepSeek API Key
+     3. Click Refresh: Models will load into the dropdown!
+   ```
+
+2. **Start the gateway:**
+   ```bash
+   # Run in foreground:
+   studiorelay start --provider deepseek
+
+   # Or start in background:
+   studiorelay start --provider deepseek --auto-port &
+   ```
+
+3. **Verify the gateway:**
+   ```bash
+   studiorelay doctor
+   ```
+
+---
+
+### Method 2: Git Clone & Daemon Installer Scripts
+
+If you want automated background daemons (`systemd` user units on Linux, `launchd` on macOS, or `Task Scheduler` on Windows):
+
+#### 1-Step Setup for DeepSeek
 
 **Linux / macOS:**
 ```bash
@@ -136,7 +201,7 @@ cd studio-relay
 .\installers\install-deepseek.ps1
 ```
 
-### 1-Step Setup for Kimi / Moonshot AI
+#### 1-Step Setup for Kimi / Moonshot AI
 
 **Linux / macOS:**
 ```bash
@@ -148,12 +213,12 @@ cd studio-relay
 .\installers\install.ps1 -Kimi
 ```
 
-### Interactive Installation (Choose or Run Multiple Providers)
+#### Interactive Multi-Provider Installer
 
 - **Linux / macOS:** `./installers/install.sh`
 - **Windows (PowerShell):** `.\installers\install.ps1`
 
-The installer sets up application files in `~/.studiorelay/app` and registers your background service.
+The installer sets up application files in `~/.studiorelay/app` and registers your background service automatically.
 
 ---
 
