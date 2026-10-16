@@ -122,36 +122,51 @@ StudioRelay acts as a transparent, high-performance local proxy:
 
 ### Method 1: Install via PyPI (Recommended & Fastest)
 
-Install the latest release directly using `pip` or `pipx`:
+Install the latest release directly using `pipx` (recommended) or `pip`:
 
 ```bash
-pip install studiorelay
-# or using pipx (isolated application environment):
 pipx install studiorelay
 ```
 
-#### What you'll see after installation:
-Verify that the CLI is ready:
-```bash
-$ studiorelay --version
-StudioRelay 0.3.0
+*(Alternatively, with standard pip: `pip install --user studiorelay`)*
 
-$ studiorelay --help
-usage: studiorelay {start,setup,use,doctor,status,stop,restart,logs,config,migrate,uninstall} ...
+> [!TIP]
+> **First-time `pipx` / `pip` users:** If your terminal says `studiorelay: command not found`, reload your shell so `~/.local/bin` is added to your active `$PATH`:
+> ```bash
+> source ~/.bashrc
+> ```
+> *(Or open a fresh terminal window).*
+
+#### Verify Installation
+
+Check that the CLI is ready:
+
+```bash
+studiorelay --version
+```
+Expected output:
+```text
+StudioRelay 0.3.0
 ```
 
-#### Next steps for the user:
+---
+
+#### Next Steps for the User
 
 1. **Configure your target provider:**
-   ```bash
-   # For DeepSeek (default port: 5001):
-   studiorelay setup deepseek
 
-   # For Kimi / Moonshot (default port: 5002):
+   For **DeepSeek** (default port: `5001`):
+   ```bash
+   studiorelay setup deepseek
+   ```
+
+   For **Kimi / Moonshot** (default port: `5002`):
+   ```bash
    studiorelay setup kimi
    ```
-   **Terminal Output:**
-   ```
+
+   **Terminal output:**
+   ```text
    StudioRelay configured for provider: DEEPSEEK
      Target Provider:   deepseek
      Upstream Base URL: https://api.deepseek.com
@@ -166,15 +181,14 @@ usage: studiorelay {start,setup,use,doctor,status,stop,restart,logs,config,migra
    ```
 
 2. **Start the gateway:**
-   ```bash
-   # Run in foreground:
-   studiorelay start --provider deepseek
 
-   # Or start in background:
+   ```bash
    studiorelay start --provider deepseek --auto-port &
    ```
+   *(Or run in foreground: `studiorelay start --provider deepseek`)*
 
 3. **Verify the gateway:**
+
    ```bash
    studiorelay doctor
    ```
