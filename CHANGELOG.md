@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.1
+
+- **Automated PATH Detection & Shell Configuration**:
+  - Automatically detect if `~/.local/bin` is in active `$PATH`.
+  - Safely add `export PATH="$HOME/.local/bin:$PATH"` to `~/.bashrc`, `~/.zshrc`, and `~/.profile` when missing.
+  - Install direct launcher script in `~/.local/bin/studiorelay` and symlink `kimibridge`.
+  - Provide clear in-terminal reload guidance (`source ~/.bashrc`) and zero-PATH alternative (`python3 -m studiorelay <command>`).
+
 ## 0.3.0
 
 - **Project Rebranding: KimiBridge → StudioRelay**:

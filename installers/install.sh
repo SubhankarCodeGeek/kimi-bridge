@@ -366,7 +366,9 @@ main() {
 
   if [ "$use_binary_mode" = true ] && [ -f "$binary_candidate" ]; then
     log "Found standalone binary artifact: $binary_candidate"
-    install_binary "$binary_candidate"
+    mkdir -p "$INSTALL_DIR/bin" "$HOME/.local/bin"
+    ln -sf "$INSTALL_DIR/bin/studiorelay" "$HOME/.local/bin/studiorelay"
+    ln -sf "$INSTALL_DIR/bin/studiorelay" "$HOME/.local/bin/kimibridge"
     exec_cmd="$INSTALL_DIR/bin/studiorelay"
   else
     if [ "$use_binary_mode" = true ]; then
@@ -374,7 +376,32 @@ main() {
     fi
     python_bin="$(detect_python || fail 'python3 is required on host when standalone binary is not built. Install python3 (e.g., sudo apt install python3) or build a standalone binary via python3 scripts/build_binary.py.')"
     exec_cmd="$python_bin -m studiorelay.cli"
+
+    mkdir -p "$HOME/.local/bin"
+    cat << EOF > "$HOME/.local/bin/studiorelay"
+#!/usr/bin/env bash
+export PYTHONPATH="${INSTALL_DIR}\${PYTHONPATH:+:\$PYTHONPATH}"
+exec "$python_bin" -m studiorelay.cli "\$@"
+EOF
+    chmod +x "$HOME/.local/bin/studiorelay"
+    ln -sf "$HOME/.local/bin/studiorelay" "$HOME/.local/bin/kimibridge"
   fi
+
+  # Automatically ensure ~/.local/bin is in shell config
+  case "$os" in
+    linux|macos)
+      local path_added=false
+      for rc_file in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.profile"; do
+        if [ -f "$rc_file" ] && ! grep -q '\.local/bin' "$rc_file" 2>/dev/null; then
+          printf '\n# Added by StudioRelay\nexport PATH="$HOME/.local/bin:$PATH"\n' >> "$rc_file"
+          path_added=true
+        fi
+      done
+      if [ "$path_added" = true ]; then
+        log "Added ~/.local/bin to shell configuration."
+      fi
+      ;;
+  esac
 
   cd "$INSTALL_DIR"
 

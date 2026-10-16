@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 from dataclasses import replace
 import json
+import os
 from pathlib import Path
 import sys
 
@@ -33,6 +34,37 @@ from studiorelay.service import (
     service_name,
     service_uninstall,
 )
+
+
+def ensure_user_path() -> tuple[bool, str | None]:
+    """Ensure ~/.local/bin is present in ~/.bashrc or ~/.zshrc if not in active PATH."""
+    home = Path.home()
+    local_bin = home / ".local" / "bin"
+    active_paths = [Path(p).resolve() for p in os.environ.get("PATH", "").split(os.pathsep) if p]
+
+    try:
+        local_bin.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        pass
+
+    in_path = local_bin.resolve() in active_paths
+    modified_file = None
+
+    if not in_path:
+        for filename in [".bashrc", ".zshrc", ".profile"]:
+            cfg = home / filename
+            if cfg.exists():
+                try:
+                    content = cfg.read_text(encoding="utf-8")
+                    if ".local/bin" not in content:
+                        with open(cfg, "a", encoding="utf-8") as f:
+                            f.write('\n# Added by StudioRelay\nexport PATH="$HOME/.local/bin:$PATH"\n')
+                        if not modified_file:
+                            modified_file = filename
+                except OSError:
+                    pass
+
+    return (in_path, modified_file)
 from studiorelay.server import run_server
 
 
@@ -220,6 +252,12 @@ def setup_provider(args: argparse.Namespace) -> int:
     print(f"  1. Set Base URL: {endpoint}")
     print(f"  2. Enter your {provider.capitalize()} API Key")
     print("  3. Click Refresh: Models will load into the dropdown!")
+
+    in_path, modified_file = ensure_user_path()
+    if not in_path and modified_file:
+        print()
+        print(f"  Tip: Added ~/.local/bin to ~/{modified_file}.")
+        print("  Run 'source ~/.bashrc' to enable the 'studiorelay' command in this terminal.")
     return 0
 
 
