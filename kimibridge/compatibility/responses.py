@@ -174,10 +174,16 @@ def chat_stream_to_response_stream(
     created_at = int(time.time())
     model = request.get("model")
     sequence = 1
-    started = False
+    buffer = ""
+
+    text_started = False
+    text_done = False
     text_parts: list[str] = []
     reasoning_parts: list[str] = []
-    buffer = ""
+    text_output_index: int | None = None
+
+    tool_calls: dict[int, dict[str, Any]] = {}
+    next_output_index = 0
 
     response_shell = {
         "id": response_id,
@@ -213,13 +219,17 @@ def chat_stream_to_response_stream(
                 continue
             if event == "[DONE]":
                 yield from _finish_response_stream(
-                    response_shell,
-                    response_id,
-                    message_id,
-                    text_parts,
-                    reasoning_parts,
-                    sequence + 1,
-                    started,
+                    response_shell=response_shell,
+                    response_id=response_id,
+                    message_id=message_id,
+                    text_parts=text_parts,
+                    reasoning_parts=reasoning_parts,
+                    text_started=text_started,
+                    text_done=text_done,
+                    text_output_index=text_output_index,
+                    tool_calls=tool_calls,
+                    next_output_index=next_output_index,
+                    sequence=sequence + 1,
                 )
                 return
             if not isinstance(event, dict):
@@ -230,64 +240,178 @@ def chat_stream_to_response_stream(
             delta = _first_choice_delta(event)
             if not delta:
                 continue
+
             text_delta = _content_to_text(delta.get("content"))
             reasoning_delta = _content_to_text(delta.get("reasoning_content"))
             if reasoning_delta:
                 reasoning_parts.append(reasoning_delta)
-            if not text_delta:
-                continue
-            if not started:
-                sequence += 1
-                yield _sse(
-                    "response.output_item.added",
-                    {
-                        "type": "response.output_item.added",
-                        "output_index": 0,
-                        "item": {
-                            "id": message_id,
-                            "type": "message",
-                            "status": "in_progress",
-                            "role": "assistant",
-                            "content": [],
+
+            if text_delta:
+                if not text_started:
+                    text_output_index = next_output_index
+                    next_output_index += 1
+                    sequence += 1
+                    yield _sse(
+                        "response.output_item.added",
+                        {
+                            "type": "response.output_item.added",
+                            "output_index": text_output_index,
+                            "item": {
+                                "id": message_id,
+                                "type": "message",
+                                "status": "in_progress",
+                                "role": "assistant",
+                                "content": [],
+                            },
                         },
-                    },
-                    sequence,
-                )
+                        sequence,
+                    )
+                    sequence += 1
+                    yield _sse(
+                        "response.content_part.added",
+                        {
+                            "type": "response.content_part.added",
+                            "item_id": message_id,
+                            "output_index": text_output_index,
+                            "content_index": 0,
+                            "part": {"type": "output_text", "text": "", "annotations": []},
+                        },
+                        sequence,
+                    )
+                    text_started = True
+
+                text_parts.append(text_delta)
                 sequence += 1
                 yield _sse(
-                    "response.content_part.added",
+                    "response.output_text.delta",
                     {
-                        "type": "response.content_part.added",
+                        "type": "response.output_text.delta",
                         "item_id": message_id,
-                        "output_index": 0,
+                        "output_index": text_output_index,
                         "content_index": 0,
-                        "part": {"type": "output_text", "text": "", "annotations": []},
+                        "delta": text_delta,
                     },
                     sequence,
                 )
-                started = True
-            text_parts.append(text_delta)
-            sequence += 1
-            yield _sse(
-                "response.output_text.delta",
-                {
-                    "type": "response.output_text.delta",
-                    "item_id": message_id,
-                    "output_index": 0,
-                    "content_index": 0,
-                    "delta": text_delta,
-                },
-                sequence,
-            )
+
+            tc_deltas = delta.get("tool_calls")
+            if isinstance(tc_deltas, list) and tc_deltas:
+                if text_started and not text_done:
+                    completed_text = "".join(text_parts)
+                    sequence += 1
+                    yield _sse(
+                        "response.output_text.done",
+                        {
+                            "type": "response.output_text.done",
+                            "item_id": message_id,
+                            "output_index": text_output_index,
+                            "content_index": 0,
+                            "text": completed_text,
+                            "logprobs": [],
+                        },
+                        sequence,
+                    )
+                    sequence += 1
+                    yield _sse(
+                        "response.content_part.done",
+                        {
+                            "type": "response.content_part.done",
+                            "item_id": message_id,
+                            "output_index": text_output_index,
+                            "content_index": 0,
+                            "part": {"type": "output_text", "text": completed_text, "annotations": []},
+                        },
+                        sequence,
+                    )
+                    sequence += 1
+                    yield _sse(
+                        "response.output_item.done",
+                        {
+                            "type": "response.output_item.done",
+                            "output_index": text_output_index,
+                            "item": {
+                                "id": message_id,
+                                "type": "message",
+                                "status": "completed",
+                                "role": "assistant",
+                                "content": [{"type": "output_text", "text": completed_text, "annotations": []}],
+                            },
+                        },
+                        sequence,
+                    )
+                    text_done = True
+
+                for tc in tc_deltas:
+                    if not isinstance(tc, dict):
+                        continue
+                    tc_idx = tc.get("index", 0)
+                    fn_info = tc.get("function") or {}
+
+                    if tc_idx not in tool_calls:
+                        call_id = tc.get("id") or f"call_{uuid4().hex}"
+                        name = fn_info.get("name", "")
+                        tc_out_idx = next_output_index
+                        next_output_index += 1
+                        tool_calls[tc_idx] = {
+                            "call_id": call_id,
+                            "name": name,
+                            "arguments_parts": [],
+                            "output_index": tc_out_idx,
+                            "done": False,
+                        }
+                        sequence += 1
+                        yield _sse(
+                            "response.output_item.added",
+                            {
+                                "type": "response.output_item.added",
+                                "output_index": tc_out_idx,
+                                "item": {
+                                    "id": call_id,
+                                    "type": "function_call",
+                                    "status": "in_progress",
+                                    "call_id": call_id,
+                                    "name": name,
+                                    "arguments": "",
+                                },
+                            },
+                            sequence,
+                        )
+                    else:
+                        entry = tool_calls[tc_idx]
+                        if tc.get("id") and not entry["call_id"]:
+                            entry["call_id"] = tc.get("id")
+                        if fn_info.get("name") and not entry["name"]:
+                            entry["name"] = fn_info.get("name")
+
+                    entry = tool_calls[tc_idx]
+                    arg_chunk = fn_info.get("arguments")
+                    if arg_chunk:
+                        entry["arguments_parts"].append(arg_chunk)
+                        sequence += 1
+                        yield _sse(
+                            "response.function_call_arguments.delta",
+                            {
+                                "type": "response.function_call_arguments.delta",
+                                "item_id": entry["call_id"],
+                                "output_index": entry["output_index"],
+                                "call_id": entry["call_id"],
+                                "delta": arg_chunk,
+                            },
+                            sequence,
+                        )
 
     yield from _finish_response_stream(
-        response_shell,
-        response_id,
-        message_id,
-        text_parts,
-        reasoning_parts,
-        sequence + 1,
-        started,
+        response_shell=response_shell,
+        response_id=response_id,
+        message_id=message_id,
+        text_parts=text_parts,
+        reasoning_parts=reasoning_parts,
+        text_started=text_started,
+        text_done=text_done,
+        text_output_index=text_output_index,
+        tool_calls=tool_calls,
+        next_output_index=next_output_index,
+        sequence=sequence + 1,
     )
 
 
@@ -462,18 +586,25 @@ def _finish_response_stream(
     message_id: str,
     text_parts: list[str],
     reasoning_parts: list[str],
+    text_started: bool,
+    text_done: bool,
+    text_output_index: int | None,
+    tool_calls: dict[int, dict[str, Any]],
+    next_output_index: int,
     sequence: int,
-    started: bool,
 ) -> Iterator[bytes]:
     text = "".join(text_parts)
-    if not text and reasoning_parts:
+    if not text and not tool_calls and reasoning_parts:
         text = "".join(reasoning_parts)
-        started = True
+        text_parts = [text]
+        text_output_index = next_output_index
+        next_output_index += 1
+        text_started = True
         yield _sse(
             "response.output_item.added",
             {
                 "type": "response.output_item.added",
-                "output_index": 0,
+                "output_index": text_output_index,
                 "item": {
                     "id": message_id,
                     "type": "message",
@@ -490,7 +621,7 @@ def _finish_response_stream(
             {
                 "type": "response.content_part.added",
                 "item_id": message_id,
-                "output_index": 0,
+                "output_index": text_output_index,
                 "content_index": 0,
                 "part": {"type": "output_text", "text": "", "annotations": []},
             },
@@ -502,20 +633,21 @@ def _finish_response_stream(
             {
                 "type": "response.output_text.delta",
                 "item_id": message_id,
-                "output_index": 0,
+                "output_index": text_output_index,
                 "content_index": 0,
                 "delta": text,
             },
             sequence,
         )
         sequence += 1
-    if started:
+
+    if text_started and not text_done:
         yield _sse(
             "response.output_text.done",
             {
                 "type": "response.output_text.done",
                 "item_id": message_id,
-                "output_index": 0,
+                "output_index": text_output_index,
                 "content_index": 0,
                 "text": text,
                 "logprobs": [],
@@ -528,7 +660,7 @@ def _finish_response_stream(
             {
                 "type": "response.content_part.done",
                 "item_id": message_id,
-                "output_index": 0,
+                "output_index": text_output_index,
                 "content_index": 0,
                 "part": {"type": "output_text", "text": text, "annotations": []},
             },
@@ -539,7 +671,7 @@ def _finish_response_stream(
             "response.output_item.done",
             {
                 "type": "response.output_item.done",
-                "output_index": 0,
+                "output_index": text_output_index,
                 "item": {
                     "id": message_id,
                     "type": "message",
@@ -550,16 +682,71 @@ def _finish_response_stream(
             },
             sequence,
         )
-        response_shell["output"] = [
+        sequence += 1
+        text_done = True
+
+    for entry in sorted(tool_calls.values(), key=lambda x: x["output_index"]):
+        if not entry["done"]:
+            full_args = "".join(entry["arguments_parts"])
+            yield _sse(
+                "response.function_call_arguments.done",
+                {
+                    "type": "response.function_call_arguments.done",
+                    "item_id": entry["call_id"],
+                    "output_index": entry["output_index"],
+                    "call_id": entry["call_id"],
+                    "arguments": full_args,
+                },
+                sequence,
+            )
+            sequence += 1
+            yield _sse(
+                "response.output_item.done",
+                {
+                    "type": "response.output_item.done",
+                    "output_index": entry["output_index"],
+                    "item": {
+                        "id": entry["call_id"],
+                        "type": "function_call",
+                        "status": "completed",
+                        "call_id": entry["call_id"],
+                        "name": entry["name"],
+                        "arguments": full_args,
+                    },
+                },
+                sequence,
+            )
+            sequence += 1
+            entry["done"] = True
+
+    output_items: list[tuple[int, dict[str, Any]]] = []
+    if text_started:
+        output_items.append((
+            text_output_index if text_output_index is not None else 0,
             {
                 "id": message_id,
                 "type": "message",
                 "status": "completed",
                 "role": "assistant",
                 "content": [{"type": "output_text", "text": text, "annotations": []}],
-            }
-        ]
+            },
+        ))
+    for entry in tool_calls.values():
+        full_args = "".join(entry["arguments_parts"])
+        output_items.append((
+            entry["output_index"],
+            {
+                "id": entry["call_id"],
+                "type": "function_call",
+                "status": "completed",
+                "call_id": entry["call_id"],
+                "name": entry["name"],
+                "arguments": full_args,
+            },
+        ))
 
+    output_items.sort(key=lambda x: x[0])
+    response_shell["output"] = [item for _, item in output_items]
     response_shell.update(
         {
             "id": response_id,

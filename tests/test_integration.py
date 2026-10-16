@@ -643,6 +643,93 @@ class IntegrationTests(unittest.TestCase):
         self.assertIn("unknown variant developer", err_body["error"]["message"])
 
 
+    def test_responses_api_streaming_tool_calls(self) -> None:
+        try:
+            upstream_port = free_port()
+            proxy_port = free_port()
+        except (PermissionError, OSError):
+            self.skipTest("Local sockets are not permitted in this environment.")
+
+        MockToolCallStreamUpstreamHandler.received = None
+        upstream = ThreadingHTTPServer(("127.0.0.1", upstream_port), MockToolCallStreamUpstreamHandler)
+        config = AppConfig(
+            server=ServerConfig(port=proxy_port),
+            kimi=KimiConfig(base_url=f"http://127.0.0.1:{upstream_port}"),
+            provider="deepseek",
+        )
+        proxy = QuietKimiBridgeServer(("127.0.0.1", proxy_port), config)
+
+        payload = {
+            "model": "deepseek-flash",
+            "input": "inspect files",
+            "stream": True,
+            "tools": [
+                {
+                    "type": "function",
+                    "name": "read_file",
+                    "description": "Read file",
+                    "parameters": {"type": "object"},
+                }
+            ],
+        }
+        request = Request(
+            f"http://127.0.0.1:{proxy_port}/v1/responses",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+
+        with running_server(upstream):
+            with running_server(proxy):
+                with urlopen(request, timeout=TEST_TIMEOUT) as response:
+                    body = response.read().decode("utf-8")
+
+        self.assertIn("event: response.output_item.added", body)
+        self.assertIn('"type": "function_call"', body)
+        self.assertIn('"name": "read_file"', body)
+        self.assertIn("event: response.function_call_arguments.delta", body)
+        self.assertIn("event: response.function_call_arguments.done", body)
+        self.assertIn("event: response.output_item.done", body)
+        self.assertIn("event: response.completed", body)
+        self.assertIn('"arguments":', body)
+        self.assertIn("build.gradle", body)
+
+
+    def test_responses_api_streaming_gzip_upstream(self) -> None:
+        try:
+            upstream_port = free_port()
+            proxy_port = free_port()
+        except (PermissionError, OSError):
+            self.skipTest("Local sockets are not permitted in this environment.")
+
+        upstream = ThreadingHTTPServer(("127.0.0.1", upstream_port), MockGzipStreamUpstreamHandler)
+        config = AppConfig(
+            server=ServerConfig(port=proxy_port),
+            kimi=KimiConfig(base_url=f"http://127.0.0.1:{upstream_port}"),
+            provider="deepseek",
+        )
+        proxy = QuietKimiBridgeServer(("127.0.0.1", proxy_port), config)
+
+        payload = {
+            "model": "deepseek-chat",
+            "input": "test gzip",
+            "stream": True,
+        }
+        request = Request(
+            f"http://127.0.0.1:{proxy_port}/v1/responses",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+
+        with running_server(upstream):
+            with running_server(proxy):
+                with urlopen(request, timeout=TEST_TIMEOUT) as response:
+                    body = response.read().decode("utf-8")
+
+        self.assertIn("GZIP_HELLO", body)
+
+
 class MockDeepSeekUpstreamHandler(BaseHTTPRequestHandler):
     received: dict[str, Any] | None = None
 
@@ -718,6 +805,23 @@ class MockStreamUpstreamHandler(BaseHTTPRequestHandler):
         self.wfile.flush()
 
 
+class MockGzipStreamUpstreamHandler(BaseHTTPRequestHandler):
+    def log_message(self, format: str, *args: Any) -> None:
+        return
+
+    def do_POST(self) -> None:
+        import gzip
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Content-Encoding", "gzip")
+        self.send_header("Connection", "close")
+        self.end_headers()
+        d1 = json.dumps({"choices": [{"delta": {"content": "GZIP_HELLO"}}]})
+        raw = f"data: {d1}\n\ndata: [DONE]\n\n".encode("utf-8")
+        self.wfile.write(gzip.compress(raw))
+        self.wfile.flush()
+
+
 class MockReasoningOnlyUpstreamHandler(BaseHTTPRequestHandler):
     received: dict[str, Any] | None = None
 
@@ -778,6 +882,55 @@ class MockReasoningOnlyStreamUpstreamHandler(BaseHTTPRequestHandler):
         self.wfile.write(
             b'data: {"choices": [{"delta": {"reasoning_content": "reasoning fallback"}}]}\n\n'
         )
+        self.wfile.flush()
+        self.wfile.write(b"data: [DONE]\n\n")
+        self.wfile.flush()
+
+
+class MockToolCallStreamUpstreamHandler(BaseHTTPRequestHandler):
+    received: dict[str, Any] | None = None
+
+    def log_message(self, format: str, *args: Any) -> None:
+        return
+
+    def do_POST(self) -> None:
+        length = int(self.headers.get("Content-Length", "0"))
+        body = self.rfile.read(length)
+        type(self).received = {
+            "path": self.path,
+            "headers": dict(self.headers.items()),
+            "payload": json.loads(body.decode("utf-8")),
+        }
+
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Connection", "close")
+        self.end_headers()
+        d1 = json.dumps({
+            "choices": [{
+                "delta": {
+                    "tool_calls": [{
+                        "index": 0,
+                        "id": "call_abc123",
+                        "type": "function",
+                        "function": {"name": "read_file", "arguments": '{"path":'},
+                    }]
+                }
+            }]
+        })
+        d2 = json.dumps({
+            "choices": [{
+                "delta": {
+                    "tool_calls": [{
+                        "index": 0,
+                        "function": {"arguments": ' "build.gradle"}'},
+                    }]
+                }
+            }]
+        })
+        self.wfile.write(f"data: {d1}\n\n".encode("utf-8"))
+        self.wfile.flush()
+        self.wfile.write(f"data: {d2}\n\n".encode("utf-8"))
         self.wfile.flush()
         self.wfile.write(b"data: [DONE]\n\n")
         self.wfile.flush()

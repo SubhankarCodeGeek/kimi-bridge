@@ -28,7 +28,7 @@ class KimiBridgeHandler(BaseHTTPRequestHandler):
 
     def log_message(self, format: str, *args: Any) -> None:
         # Avoid logging request headers; Authorization must never be printed.
-        print(f"{self.address_string()} - {format % args}")
+        print(f"{self.address_string()} - {format % args}", flush=True)
 
     def _get_config(self) -> AppConfig:
         server_config: AppConfig = getattr(self.server, "config", AppConfig())
@@ -261,7 +261,7 @@ class KimiBridgeHandler(BaseHTTPRequestHandler):
         return payload
 
     def _forward_headers(self) -> dict[str, str]:
-        blocked = {"host", "content-length", "connection"}
+        blocked = {"host", "content-length", "connection", "accept-encoding"}
         headers = {
             key: value
             for key, value in self.headers.items()

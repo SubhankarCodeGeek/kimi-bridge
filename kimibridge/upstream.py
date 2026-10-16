@@ -1,6 +1,7 @@
 from contextlib import contextmanager
 from dataclasses import dataclass
 import json
+import zlib
 from typing import Any, Generator, Iterator
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -21,11 +22,25 @@ class UpstreamStreamResponse:
 
     def iter_chunks(self, chunk_size: int = 4096) -> Iterator[bytes]:
         read_fn = getattr(self.response, "read1", self.response.read)
-        while True:
-            chunk = read_fn(chunk_size)
-            if not chunk:
-                break
-            yield chunk
+        encoding = self.headers.get("Content-Encoding", "").lower()
+        if "gzip" in encoding or "deflate" in encoding:
+            decompressor = zlib.decompressobj(32 + zlib.MAX_WBITS)
+            while True:
+                chunk = read_fn(chunk_size)
+                if not chunk:
+                    remaining = decompressor.flush()
+                    if remaining:
+                        yield remaining
+                    break
+                decompressed = decompressor.decompress(chunk)
+                if decompressed:
+                    yield decompressed
+        else:
+            while True:
+                chunk = read_fn(chunk_size)
+                if not chunk:
+                    break
+                yield chunk
 
 
 class UpstreamUnavailable(Exception):
@@ -78,10 +93,15 @@ class KimiUpstreamClient:
         )
         try:
             with urlopen(request, timeout=self.timeout) as response:
+                body = response.read()
+                resp_headers = dict(response.headers.items())
+                encoding = resp_headers.get("Content-Encoding", "").lower()
+                if "gzip" in encoding or "deflate" in encoding:
+                    body = zlib.decompress(body, 32 + zlib.MAX_WBITS)
                 return UpstreamResponse(
-                    body=response.read(),
+                    body=body,
                     status=response.status,
-                    headers=dict(response.headers.items()),
+                    headers=resp_headers,
                 )
         except HTTPError as exc:
             raise UpstreamHttpError(exc.code, exc.read()) from exc
@@ -102,10 +122,15 @@ class KimiUpstreamClient:
         )
         try:
             with urlopen(request, timeout=self.timeout) as response:
+                body = response.read()
+                resp_headers = dict(response.headers.items())
+                encoding = resp_headers.get("Content-Encoding", "").lower()
+                if "gzip" in encoding or "deflate" in encoding:
+                    body = zlib.decompress(body, 32 + zlib.MAX_WBITS)
                 return UpstreamResponse(
-                    body=response.read(),
+                    body=body,
                     status=response.status,
-                    headers=dict(response.headers.items()),
+                    headers=resp_headers,
                 )
         except HTTPError as exc:
             raise UpstreamHttpError(exc.code, exc.read()) from exc
