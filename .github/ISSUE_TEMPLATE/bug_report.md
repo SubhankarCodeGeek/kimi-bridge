@@ -1,6 +1,6 @@
 ---
 name: Bug report
-about: Create a report to help us improve KimiBridge
+about: Create a report to help us improve StudioRelay
 title: '[BUG] '
 labels: bug
 assignees: ''
@@ -12,7 +12,7 @@ A clear and concise description of what the bug is.
 
 **To Reproduce**
 Steps to reproduce the behavior:
-1. Run `kimibridge start`
+1. Run `studiorelay start`
 2. Send request with ...
 3. See error
 
@@ -20,7 +20,7 @@ Steps to reproduce the behavior:
 A clear description of what you expected to happen.
 
 **Doctor Output**
-Run `kimibridge doctor` and paste the output here:
+Run `studiorelay doctor` (or `kimibridge doctor`) and paste the output here:
 
 ```text
 (paste output here)
@@ -28,5 +28,6 @@ Run `kimibridge doctor` and paste the output here:
 
 **Environment (please complete the following information):**
  - OS: [e.g. Linux Ubuntu, macOS 14, Windows 11]
- - KimiBridge Version: [e.g. 0.2.0]
+ - StudioRelay Version: [e.g. 0.3.0]
+ - Target Provider: [e.g. DeepSeek, Kimi/Moonshot, OpenAI]
  - Client Tool: [e.g. Android Studio, Cursor, Aider]

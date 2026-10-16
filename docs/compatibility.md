@@ -1,12 +1,12 @@
 # Compatibility Matrix
 
-KimiBridge provides a standard OpenAI-compatible API gateway (`127.0.0.1:5001/v1`) that translates rich agentic client protocols into provider-specific schemas.
+StudioRelay provides a standard OpenAI-compatible API gateway (`127.0.0.1:5001/v1` for DeepSeek, `127.0.0.1:5002/v1` for Kimi) that translates rich agentic client protocols into provider-specific schemas.
 
 ---
 
 ## Provider Capability Matrix
 
-| Feature / Schema Element | OpenAI Direct | Kimi / Moonshot | DeepSeek (Chat Completions) | KimiBridge Normalized |
+| Feature / Schema Element | OpenAI Direct | Kimi / Moonshot | DeepSeek (Chat Completions) | StudioRelay Normalized |
 |--------------------------|---------------|-----------------|-----------------------------|-----------------------|
 | **`developer` role** | ✅ Supported | ❌ 422 / Reject | ❌ 422 (`unknown variant developer`) | 🔄 Normalized to `system` |
 | **`parallel_tool_calls`** | ✅ Supported | ❌ Unrecognized | ⚠️ Parameter Ignored / Varies | 🧹 Stripped in `compatible` mode |
@@ -31,19 +31,19 @@ KimiBridge provides a standard OpenAI-compatible API gateway (`127.0.0.1:5001/v1
 
 ## Configuring Providers
 
-You can configure KimiBridge to target different providers or let it auto-detect based on the model or upstream URL:
+You can configure StudioRelay to target different providers or let it auto-detect based on the model or upstream URL:
 
 ```bash
 # Configure for DeepSeek
-python3 -m kimibridge.cli config set provider deepseek
-python3 -m kimibridge.cli config set base-url https://api.deepseek.com
+studiorelay config set provider deepseek
+studiorelay config set base-url https://api.deepseek.com
 
-# Configure for Kimi / Moonshot (default)
-python3 -m kimibridge.cli config set provider kimi
-python3 -m kimibridge.cli config set base-url https://api.moonshot.ai
+# Configure for Kimi / Moonshot
+studiorelay config set provider kimi
+studiorelay config set base-url https://api.moonshot.ai
 
 # Set compatibility mode
-python3 -m kimibridge.cli config set compatibility-mode compatible
+studiorelay config set compatibility-mode compatible
 ```
 
 ### Compatibility Modes

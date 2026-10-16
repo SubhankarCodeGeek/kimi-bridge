@@ -5,29 +5,29 @@
 **Linux / macOS:**
 ```bash
 # First-time install:
-git clone https://github.com/SubhankarCodeGeek/kimi-bridge.git
-cd kimi-bridge
+git clone https://github.com/SubhankarCodeGeek/studio-relay.git
+cd studio-relay
 ./installers/install-deepseek.sh
 
 # Updating existing install:
-cd kimi-bridge && git pull origin main
+cd studio-relay && git pull origin main
 ./installers/install-deepseek.sh
 ```
 
 **Windows (PowerShell):**
 ```powershell
 # First-time install:
-git clone https://github.com/SubhankarCodeGeek/kimi-bridge.git
-cd kimi-bridge
+git clone https://github.com/SubhankarCodeGeek/studio-relay.git
+cd studio-relay
 .\installers\install-deepseek.ps1
 
 # Updating existing install:
-cd kimi-bridge; git pull origin main
+cd studio-relay; git pull origin main
 .\installers\install-deepseek.ps1
 ```
 
 > **Troubleshooting:**
-> - If `fatal: destination path 'kimi-bridge' already exists and is not an empty directory`: run `cd kimi-bridge && git pull origin main && ./installers/install-deepseek.sh`.
+> - If `fatal: destination path 'studio-relay' already exists and is not an empty directory`: run `cd studio-relay && git pull origin main && ./installers/install-deepseek.sh`.
 > - If `bash: Permission denied`: run `chmod +x installers/*.sh` or execute with `bash ./installers/install-deepseek.sh`.
 
 ---
@@ -61,10 +61,29 @@ From a local checkout:
 ```
 
 The installer:
-- Copies application files to `~/.kimibridge/app`
-- Preserves existing configuration in `~/.kimibridge/config.json`
-- Tests and configures the port (defaults to `5001`, falls back cleanly if busy)
+- Copies application files to `~/.studiorelay/app`
+- Preserves existing configuration in `~/.studiorelay/config.json` (or migrates seamlessly from `~/.kimibridge/config.json`)
+- Tests and configures the port (defaults to `5001` for DeepSeek, `5002` for Kimi, falls back cleanly if busy)
 - Registers and starts the background user service (`launchd` on macOS, `systemd --user` on Linux, Task Scheduler on Windows)
+
+---
+
+## Upgrading from KimiBridge
+
+StudioRelay includes a seamless, safe migration path for existing KimiBridge installations:
+
+1. **Migrate configurations explicitly (optional, installer also does this automatically):**
+   ```bash
+   studiorelay migrate --dry-run
+   studiorelay migrate
+   ```
+   This safely copies configurations from `~/.kimibridge/` to `~/.studiorelay/` with an automatic timestamped backup and zero credential exposure.
+
+2. **Re-run the installer:**
+   ```bash
+   ./installers/install.sh
+   ```
+   The installer automatically detects legacy services (`kimibridge-deepseek.service`, `kimibridge.service`), stops them cleanly to prevent port conflicts, and starts `studiorelay-*.service`.
 
 ---
 
@@ -72,14 +91,16 @@ The installer:
 
 Switch providers anytime after installation without reinstalling:
 ```bash
-python3 -m kimibridge.cli setup deepseek
-# or: python3 -m kimibridge.cli setup kimi
-# or: python3 -m kimibridge.cli setup all
+studiorelay setup deepseek
+# or: studiorelay setup kimi
+# or: studiorelay setup all
 ```
+
+*(Legacy command `kimibridge setup <provider>` remains fully supported)*
 
 ---
 
-## Updating / Upgrading KimiBridge
+## Updating / Upgrading StudioRelay
 
 Upgrades are designed to be zero-downtime and non-destructive for existing settings:
 
@@ -95,11 +116,11 @@ Upgrades are designed to be zero-downtime and non-destructive for existing setti
    # Windows
    .\installers\install.ps1
    ```
-The installer automatically replaces application files in `~/.kimibridge/app`, preserves your existing `config.json` (keeping your ports and providers), and restarts the background service with the new build.
+The installer automatically updates application files in `~/.studiorelay/app`, preserves your existing `config.json` (keeping your ports and providers), and restarts the background service with the new build.
 
 Verify the running version:
 ```bash
-python3 -m kimibridge.cli doctor
+studiorelay doctor
 ```
 
 ---
@@ -138,7 +159,7 @@ Windows:
 .\installers\uninstall.ps1
 ```
 
-The uninstallers remove app files and service registrations. User config in `~/.kimibridge/config.json` is left in place.
+The uninstallers remove app files and service registrations. User configurations in `~/.studiorelay/` and `~/.kimibridge/` are safely preserved.
 
 ---
 
@@ -147,10 +168,10 @@ The uninstallers remove app files and service registrations. User config in `~/.
 After installation:
 
 ```bash
-python3 -m kimibridge.cli status
-python3 -m kimibridge.cli stop
-python3 -m kimibridge.cli restart
-python3 -m kimibridge.cli logs
-python3 -m kimibridge.cli doctor
-python3 -m kimibridge.cli uninstall
+studiorelay status
+studiorelay stop
+studiorelay restart
+studiorelay logs
+studiorelay doctor
+studiorelay uninstall
 ```

@@ -6,7 +6,7 @@
                              │
                              ▼
                     ┌──────────────────┐
-                    │    KimiBridge    │
+                    │   StudioRelay    │
                     │   HTTP Gateway   │
                     └────────┬─────────┘
                              │
@@ -24,7 +24,7 @@
        api.moonshot.ai api.deepseek.com api.openai.com
 ```
 
-The gateway is platform-neutral and runs locally (default: `127.0.0.1:5001/v1`). Native service managers (`systemd` on Linux, `launchd` on macOS, and `Task Scheduler` on Windows) run the server as a background daemon.
+The gateway is platform-neutral and runs locally (default: `127.0.0.1:5001/v1` for DeepSeek, `127.0.0.1:5002/v1` for Kimi). Native service managers (`systemd` on Linux, `launchd` on macOS, and `Task Scheduler` on Windows) run the server as a background daemon.
 
 ---
 
@@ -32,7 +32,7 @@ The gateway is platform-neutral and runs locally (default: `127.0.0.1:5001/v1`).
 
 Agentic clients (like Android Studio AI Assistant) emit OpenAI-style schemas that utilize newer features—such as the `developer` message role, `store`, `metadata`, or `parallel_tool_calls` parameters. Many upstream providers advertise "OpenAI-compatible" endpoints, but strictly reject schema extensions with HTTP 422 or deserialization errors.
 
-KimiBridge implements a provider-aware normalization pipeline:
+StudioRelay implements a provider-aware normalization pipeline:
 
 ```text
 Request (OpenAI Schema)

@@ -25,7 +25,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Compile
-        run: python -m compileall kimibridge tests
+        run: python -m compileall studiorelay kimibridge tests
 
       - name: Test
         run: python -m unittest discover -s tests
@@ -65,3 +65,6 @@ jobs:
           $err3 = $null
           $null = [System.Management.Automation.Language.Parser]::ParseInput((Get-Content .\installers\install-deepseek.ps1 -Raw), [ref]$null, [ref]$err3)
           if ($err3.Count -gt 0) { throw $err3 }
+          $err4 = $null
+          $null = [System.Management.Automation.Language.Parser]::ParseInput((Get-Content .\installers\install-kimi.ps1 -Raw), [ref]$null, [ref]$err4)
+          if ($err4.Count -gt 0) { throw $err4 }

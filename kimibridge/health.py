@@ -35,11 +35,11 @@ def check_health(host: str, port: int, timeout: float = 1.0) -> HealthStatus:
             message="Health endpoint returned invalid JSON.",
         )
 
-    if response.status == 200 and payload.get("service") == "kimibridge":
+    if response.status == 200 and payload.get("service") in {"kimibridge", "studiorelay"}:
         return HealthStatus(
             ok=True,
             status="healthy",
-            message="KimiBridge health endpoint is OK.",
+            message="Health endpoint is OK.",
             payload=payload,
         )
 

@@ -82,7 +82,7 @@ def get_kimibridge_status(host: str, port: int, timeout: float = 0.5) -> dict[st
     except json.JSONDecodeError:
         return None
 
-    if isinstance(payload, dict) and payload.get("service") == "kimibridge":
+    if isinstance(payload, dict) and payload.get("service") in {"kimibridge", "studiorelay"}:
         if not payload.get("provider"):
             detected = _detect_provider_from_models(host, port, timeout=timeout)
             if detected:

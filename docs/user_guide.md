@@ -1,18 +1,24 @@
-# KimiBridge User Guide
+# StudioRelay User Guide
 
-Welcome to **KimiBridge**! This guide walks you through setting up and connecting KimiBridge to your favorite IDEs, AI assistants, and developer tools.
+Welcome to **StudioRelay**! This guide walks you through setting up and connecting StudioRelay to Android Studio, coding assistants, and developer tools.
+
+> **Tagline:** One IDE Agent. Multiple AI Models. Zero Vendor Lock-in.
 
 ---
 
-## What is KimiBridge?
+## What is StudioRelay?
 
-KimiBridge is a local, lightweight compatibility gateway that exposes an **OpenAI-compatible API** (`http://127.0.0.1:5001/v1`) while translating requests under the hood to target LLM providers like **Kimi / Moonshot AI** (`api.moonshot.ai`) and **DeepSeek** (`api.deepseek.com`).
+StudioRelay is an open-source compatibility gateway that connects Android Studio's AI agent to supported alternative LLM providers.
 
-It automatically resolves protocol divergences between agentic clients and strict upstreams:
+Android Studio's AI agent remains responsible for its agentic workflow, including understanding coding tasks, using project context, interacting with tools, and coordinating development operations. StudioRelay provides the local compatibility infrastructure between that IDE agent and your selected LLM provider.
+
+It automatically resolves protocol divergences between agentic clients and upstream providers:
+- Exposes standard OpenAI `/v1/models`, `/v1/chat/completions`, and `/v1/responses` endpoints.
 - Normalizes unsupported OpenAI `developer` role messages to `system` role.
 - Cleans and filters incompatible request parameters (`parallel_tool_calls`, `store`, `metadata`).
+- Translates `reasoning_content` to visible text when `content` is empty so thinking models output visible answers.
 - Proxies real-time **Server-Sent Events (SSE)** streaming responses with zero latency.
-- Formats upstream error payloads (such as DeepSeek HTTP 422 deserialization errors) into clean OpenAI-standard formats.
+- Formats upstream error payloads into clean OpenAI-standard formats.
 
 ---
 
@@ -30,7 +36,7 @@ It automatically resolves protocol divergences between agentic clients and stric
 .\installers\install.ps1
 ```
 
-Once installed, KimiBridge runs automatically in the background as a user service (`systemd` / `launchd` / `Task Scheduler`).
+Once installed, StudioRelay runs automatically in the background as a user service (`systemd` / `launchd` / `Task Scheduler`).
 
 ### Option B: Run Standalone Binary directly
 
@@ -39,37 +45,39 @@ Once installed, KimiBridge runs automatically in the background as a user servic
 python3 scripts/build_binary.py
 
 # Run the binary
-./dist/kimibridge-linux-x86_64 start
+./dist/studiorelay-linux-x86_64 start
 ```
 
 ### Option C: Run Python CLI directly
 
 ```bash
-python3 -m kimibridge.cli start --auto-port
+studiorelay start --auto-port
+# Or: python3 -m studiorelay.cli start --auto-port
 ```
 
-Default Base URL:
+Default Base URLs:
 ```text
-http://127.0.0.1:5001/v1
+http://127.0.0.1:5001/v1   (DeepSeek)
+http://127.0.0.1:5002/v1   (Kimi / Moonshot)
 ```
 
 ---
 
 ## 2. Choosing Your Target Provider
 
-KimiBridge supports provider profiles and seamless switching with the `setup` (or `use`) command.
+StudioRelay supports provider profiles and seamless switching with the `setup` (or `use`) command.
 
 ### Option 1: Use DeepSeek (1-Step Setup)
 ```bash
-python3 -m kimibridge.cli setup deepseek
+studiorelay setup deepseek
 ```
 *(Automatically sets provider `deepseek`, upstream base URL `https://api.deepseek.com`, and restarts the background service).*
 
 Supported models: `deepseek-chat`, `deepseek-reasoner`, `deepseek-v3-pro`, `deepseek-flash`, `deepseek-v3`, `deepseek-r1`.
 
-### Option 2: Use Kimi / Moonshot AI (Default)
+### Option 2: Use Kimi / Moonshot AI
 ```bash
-python3 -m kimibridge.cli setup kimi
+studiorelay setup kimi
 ```
 *(Automatically sets provider `kimi`, upstream base URL `https://api.moonshot.ai`, and restarts the background service).*
 
@@ -77,7 +85,7 @@ Supported models: `kimi-k3`, `moonshot-v1-8k`, `moonshot-v1-32k`, `moonshot-v1-1
 
 ### Option 3: Expose All Providers Concurrently
 ```bash
-python3 -m kimibridge.cli setup all
+studiorelay setup all
 ```
 *(Exposes all supported models simultaneously in client model dropdowns).*
 
@@ -87,7 +95,7 @@ python3 -m kimibridge.cli setup all
 
 ### 🤖 Android Studio AI Assistant Setup
 
-With KimiBridge, you can run and configure **both DeepSeek and Kimi simultaneously** on separate local ports without any model list conflict:
+With StudioRelay, you can run and configure **both DeepSeek and Kimi simultaneously** on separate local ports without any model list conflict:
 
 #### DeepSeek Provider:
 1. Open **Android Studio** ➔ **Settings** (or **Preferences** on macOS).
@@ -111,100 +119,24 @@ Both providers run independently in the background on separate ports. Refreshing
 
 ---
 
-### ⚡ Cursor IDE Setup
-
-1. Open **Cursor Settings** (Gear icon in top right or `Ctrl+,` / `Cmd+,`).
-2. Go to **Models** section.
-3. Enable **OpenAI API Key** or Custom Provider.
-4. Set:
-   - **Override OpenAI Base URL**: `http://127.0.0.1:5001/v1`
-   - **API Key**: *Your Provider API Key*
-5. Add model (e.g. `deepseek-v3-pro`, `kimi-k3`).
-
----
-
-### 💻 VS Code (with Continue or CodeGPT Extension)
-
-In VS Code, add custom provider configuration (e.g. in Continue `config.json`):
-
-```json
-{
-  "models": [
-    {
-      "title": "DeepSeek via KimiBridge",
-      "provider": "openai",
-      "model": "deepseek-v3-pro",
-      "apiBase": "http://127.0.0.1:5001/v1",
-      "apiKey": "YOUR_DEEPSEEK_API_KEY"
-    }
-  ]
-}
-```
-
----
-
-### 🐍 Aider CLI Setup
-
-```bash
-export OPENAI_API_BASE="http://127.0.0.1:5001/v1"
-export OPENAI_API_KEY="YOUR_API_KEY"
-
-# With DeepSeek
-aider --model openai/deepseek-v3-pro
-
-# With Kimi
-aider --model openai/kimi-k3
-```
-
----
-
-### 🌐 cURL Request Examples
-
-#### Standard Chat Completion
-```bash
-curl http://127.0.0.1:5001/v1/chat/completions \
-  -H "Authorization: Bearer YOUR_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "deepseek-v3-pro",
-    "messages": [
-      {"role": "developer", "content": "You are an Android expert."},
-      {"role": "user", "content": "Explain Coroutines vs Flow in Kotlin."}
-    ]
-  }'
-```
-
-#### Real-Time SSE Streaming
-```bash
-curl -N http://127.0.0.1:5001/v1/chat/completions \
-  -H "Authorization: Bearer YOUR_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "deepseek-v3-pro",
-    "messages": [
-      {"role": "user", "content": "Write a short poem about code."}
-    ],
-    "stream": true
-  }'
-```
-
----
-
 ## 4. CLI Management Commands
 
 | Command | Action |
 |---------|--------|
-| `kimibridge start` | Starts the proxy server in foreground. |
-| `kimibridge doctor` | Runs environment diagnostics & health check. |
-| `kimibridge status` | Checks background service health. |
-| `kimibridge logs` | Views background service logs. |
-| `kimibridge stop` | Stops background service. |
-| `kimibridge restart` | Restarts background service. |
-| `kimibridge config show` | Displays active config & endpoint. |
-| `kimibridge config set provider deepseek` | Configures target provider (`deepseek`, `kimi`, `openai`, `auto`). |
-| `kimibridge config set base-url <url>` | Sets upstream base URL. |
-| `kimibridge config set port 5002` | Changes configured port. |
-| `kimibridge uninstall` | Removes service and application files. |
+| `studiorelay start` | Starts the proxy server in foreground. |
+| `studiorelay doctor` | Runs environment diagnostics & health check. |
+| `studiorelay status` | Checks background service health. |
+| `studiorelay logs` | Views background service logs. |
+| `studiorelay stop` | Stops background service. |
+| `studiorelay restart` | Restarts background service. |
+| `studiorelay config show` | Displays active config & endpoint. |
+| `studiorelay config set provider deepseek` | Configures target provider (`deepseek`, `kimi`, `openai`, `auto`). |
+| `studiorelay config set base-url <url>` | Sets upstream base URL. |
+| `studiorelay config set port 5003` | Changes configured port. |
+| `studiorelay migrate` | Safely migrates configurations from `~/.kimibridge/` to `~/.studiorelay/`. |
+| `studiorelay uninstall` | Removes service and application files. |
+
+*(Legacy command `kimibridge <action>` is supported identically)*
 
 ---
 
@@ -213,19 +145,22 @@ curl -N http://127.0.0.1:5001/v1/chat/completions \
 Run the doctor command anytime to verify connectivity:
 
 ```bash
-python3 -m kimibridge.cli doctor
+studiorelay doctor
 ```
 
 Output example:
 ```text
-KimiBridge Doctor
-Version: 0.2.0
-Config path: /home/user/.kimibridge/config.json
+StudioRelay Doctor (DEEPSEEK)
+Version: 0.3.0
+Python: 3.12.3
+Config path: /home/user/.studiorelay/config-deepseek.json
 Configured endpoint: http://127.0.0.1:5001/v1
 Provider: deepseek
 Compatibility mode: compatible
-Kimi base URL: https://api.deepseek.com
+Upstream base URL: https://api.deepseek.com
+Upstream fallback base URL: None
 Port status: already_running
+StudioRelay (deepseek) is already running on port 5001.
 Health: healthy
-KimiBridge health endpoint is OK.
+Gateway health endpoint is OK.
 ```

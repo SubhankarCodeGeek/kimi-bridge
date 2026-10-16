@@ -25,7 +25,7 @@ def get_target_info() -> tuple[str, str]:
     else:
         arch = machine
 
-    stem = f"kimibridge-{system}-{arch}"
+    stem = f"studiorelay-{system}-{arch}"
     ext = ".exe" if system == "windows" else ""
     return stem, f"{stem}{ext}"
 
@@ -42,7 +42,8 @@ def generate_checksums(dist_dir: Path = DIST_DIR) -> Path:
     checksum_file = dist_dir / "SHA256SUMS.txt"
     lines: list[str] = []
 
-    for item in sorted(dist_dir.glob("kimibridge*")):
+    candidates = sorted(set(list(dist_dir.glob("studiorelay*")) + list(dist_dir.glob("kimibridge*"))))
+    for item in candidates:
         if item.is_file() and item.name != "SHA256SUMS.txt" and not item.name.startswith("_"):
             digest = compute_sha256(item)
             lines.append(f"{digest}  {item.name}")
@@ -69,8 +70,10 @@ def build_pyinstaller(target_stem: str, target_name: str) -> Path:
         "--specpath",
         str(spec_dir),
         "--collect-all",
+        "studiorelay",
+        "--collect-all",
         "kimibridge",
-        str(REPO_ROOT / "kimibridge" / "cli.py"),
+        str(REPO_ROOT / "studiorelay" / "cli.py"),
     ]
     subprocess.run(cmd, check=True)
 
@@ -94,7 +97,7 @@ def build_zipapp(target_name: str) -> Path:
         source=REPO_ROOT,
         target=target_path,
         interpreter="/usr/bin/env python3",
-        main="kimibridge.cli:main",
+        main="studiorelay.cli:main",
         compressed=True,
     )
     if platform.system().lower() != "windows":

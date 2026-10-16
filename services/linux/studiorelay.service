@@ -1,0 +1,13 @@
+[Unit]
+Description=StudioRelay local compatibility gateway
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=__INSTALL_DIR__
+ExecStart=__EXEC_CMD__ start __PROVIDER_FLAG__ --auto-port
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target

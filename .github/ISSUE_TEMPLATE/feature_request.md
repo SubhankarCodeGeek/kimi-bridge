@@ -1,6 +1,6 @@
 ---
 name: Feature request
-about: Suggest an idea for KimiBridge
+about: Suggest an idea or new provider for StudioRelay
 title: '[FEATURE] '
 labels: enhancement
 assignees: ''

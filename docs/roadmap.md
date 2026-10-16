@@ -94,6 +94,17 @@ Status: complete.
 - Support DeepSeek Chat Completions compatibility (`developer` ➔ `system` normalization, HTTP 422 error normalization).
 - Add DeepSeek test fixtures and end-to-end integration tests.
 - Support OpenAI passthrough profile preserving `developer` role.
-- Add CLI provider selection (`kimibridge config set provider <name>`).
+- Add CLI provider selection (`studiorelay config set provider <name>`).
+
+Status: complete.
+
+## Phase 12: StudioRelay Rebranding & Open Architecture
+
+- Rebrand project from KimiBridge to StudioRelay ("One IDE Agent. Multiple AI Models. Zero Vendor Lock-in.").
+- Establish `studiorelay` Python package namespace and CLI executable.
+- Preserve backward compatibility for `kimibridge` imports, CLI invocations, and service files.
+- Introduce configuration precedence (`STUDIORELAY_CONFIG` > `KIMIBRIDGE_CONFIG` > `~/.studiorelay/` > `~/.kimibridge/`).
+- Add idempotent `studiorelay migrate` command with automatic backups and zero secret logging.
+- Retain verified Android Studio agentic integration, reasoning fallback, and dual provider support.
 
 Status: complete.

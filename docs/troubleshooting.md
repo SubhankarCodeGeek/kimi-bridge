@@ -2,16 +2,15 @@
 
 ## Port Already In Use
 
-KimiBridge defaults to:
+StudioRelay defaults to:
 
-```text
-127.0.0.1:5001
-```
+- `127.0.0.1:5001` (DeepSeek)
+- `127.0.0.1:5002` (Kimi)
 
-To let KimiBridge choose another available port:
+To let StudioRelay choose another available port:
 
 ```bash
-python3 -m kimibridge.cli start --auto-port
+studiorelay start --auto-port
 ```
 
 Use the printed endpoint in Android Studio.
@@ -19,20 +18,20 @@ Use the printed endpoint in Android Studio.
 To set a port manually:
 
 ```bash
-python3 -m kimibridge.cli config set port 5002
-python3 -m kimibridge.cli start
+studiorelay config set port 5003
+studiorelay start
 ```
 
 To inspect the current endpoint:
 
 ```bash
-python3 -m kimibridge.cli config show
+studiorelay config show
 ```
 
 To check whether the proxy is running:
 
 ```bash
-python3 -m kimibridge.cli status
+studiorelay status
 ```
 
 ---
@@ -51,7 +50,7 @@ expected one of system, user, assistant, tool, latest_reminder
 Android Studio and modern coding agents inject system/developer prompts with `role: "developer"`. Strict upstream API proxies (such as DeepSeek's Rust/Serde deserializer) reject the `developer` role before the request ever reaches the LLM.
 
 ### Fix:
-Route requests through KimiBridge at `http://127.0.0.1:5001/v1`. KimiBridge intercepts the request and normalizes `developer` ➔ `system`, allowing the request to deserialize cleanly upstream.
+Route requests through StudioRelay at `http://127.0.0.1:5001/v1`. StudioRelay intercepts the request and normalizes `developer` ➔ `system`, allowing the request to deserialize cleanly upstream.
 
 ---
 
@@ -68,10 +67,10 @@ No ModelResponse at all
 ```
 
 ### Cause:
-The client is calling `POST /v1/responses`. Older KimiBridge versions only implemented `GET /v1/models` and `POST /v1/chat/completions`, so model discovery could work while inference failed.
+The client is calling `POST /v1/responses`. Standard LLMs only implement `POST /v1/chat/completions`, so model discovery could work while agentic inference failed.
 
 ### Fix:
-Update KimiBridge and restart the background service. Current versions translate `POST /v1/responses` into the upstream Chat Completions schema, then translate the completion or stream events back into Responses API format.
+Update StudioRelay and restart the background service. StudioRelay translates `POST /v1/responses` into the upstream Chat Completions schema, then translates the completion or stream events back into Responses API format.
 
 ---
 
@@ -91,7 +90,7 @@ deepseek-chat
 The current DeepSeek API accepts `deepseek-flash` and `deepseek-v4-pro` as model IDs. Older IDE configs and dropdown entries may still use legacy or marketing-style names such as `deepseek-v3-pro`.
 
 ### Fix:
-Update KimiBridge and restart the background service. Current versions keep the legacy names visible for client compatibility, but rewrite them before forwarding upstream:
+Update StudioRelay and restart the background service. StudioRelay keeps legacy names visible for client compatibility, but rewrites them before forwarding upstream:
 
 ```text
 deepseek-chat      -> deepseek-flash
@@ -107,20 +106,20 @@ For new configurations, prefer selecting `deepseek-flash` or `deepseek-v4-pro` d
 ## DeepSeek: Generated Status but No Output
 
 ### Symptom:
-When using KimiBridge, Android Studio shows the model as generating or generated, but no assistant text appears.
+Android Studio shows the model as generating or generated, but no assistant text appears.
 
 ### Cause:
-DeepSeek can return thinking output in `reasoning_content` before or instead of final `content`. Older KimiBridge versions only translated `content` into Responses API `output_text`, so a successful HTTP 200 stream could complete with an empty visible answer.
+DeepSeek can return thinking output in `reasoning_content` before or instead of final `content`. When final `content` is empty, an ordinary gateway leaves the answer blank.
 
 ### Fix:
-Update KimiBridge and restart the background service. Current versions use `reasoning_content` as a fallback visible output when final `content` is empty.
+StudioRelay uses `reasoning_content` as a fallback visible output whenever final `content` is empty.
 
 ---
 
 ## HTTP 403 with Kimi / Moonshot
 
 ### Symptom:
-Requests through KimiBridge fail with:
+Requests through StudioRelay fail with:
 
 ```text
 403 Forbidden
@@ -130,17 +129,17 @@ or an OpenAI-style error whose code is `upstream_permission_denied`.
 
 ### Common causes:
 
-- The API key does not belong to the configured provider. Moonshot Open Platform keys and other Kimi/Kimi Code credentials are not interchangeable.
-- The configured base URL is stale after switching providers. For the Moonshot Open Platform, use `https://api.moonshot.ai` or `https://api.moonshot.ai/v1`; KimiBridge normalizes either form internally.
+- The API key does not belong to the configured provider. Moonshot Open Platform keys and other Kimi credentials are not interchangeable.
+- The configured base URL is stale after switching providers. For the Moonshot Open Platform, use `https://api.moonshot.ai` or `https://api.moonshot.ai/v1`.
 - Android Studio is still sending a model from another provider after a provider switch. Refresh the model list and select a `kimi-*` or `moonshot-*` model for Kimi.
 - The account or key does not have permission for the selected model.
 
 ### Fix:
 
 ```bash
-python3 -m kimibridge.cli setup kimi
-python3 -m kimibridge.cli restart
-python3 -m kimibridge.cli config show
+studiorelay setup kimi
+studiorelay restart
+studiorelay config show
 ```
 
 Then use your Moonshot/Kimi API key in the client and refresh the model dropdown.
@@ -153,9 +152,9 @@ If Android Studio displays models from another provider (e.g. `kimi-k3` instead 
 
 1. Switch your provider with a single command:
    ```bash
-   python3 -m kimibridge.cli setup deepseek
+   studiorelay setup deepseek
    ```
-   *(Or for Kimi: `python3 -m kimibridge.cli setup kimi`, or for all models: `python3 -m kimibridge.cli setup all`)*
+   *(Or for Kimi: `studiorelay setup kimi`, or for all models: `studiorelay setup all`)*
 
    This command automatically:
    - Sets the target provider (`deepseek`)
@@ -169,46 +168,48 @@ If Android Studio displays models from another provider (e.g. `kimi-k3` instead 
 ## Background Service Management
 
 ### Linux (`systemd --user`)
-On Linux hosts, KimiBridge runs as a `systemd --user` service named `kimibridge`.
+On Linux hosts, StudioRelay runs as a `systemd --user` service named `studiorelay-<provider>` (e.g. `studiorelay-deepseek`):
 
 ```bash
 # View recent service logs
-python3 -m kimibridge.cli logs
+studiorelay logs
 
 # Query systemd directly
-systemctl --user status kimibridge
-journalctl --user -u kimibridge -n 50 --no-pager
+systemctl --user status studiorelay-deepseek
+journalctl --user -u studiorelay-deepseek -n 50 --no-pager
 
 # Restart service
-python3 -m kimibridge.cli restart
+studiorelay restart
 ```
 
+*(Legacy services named `kimibridge-*` or `kimibridge` remain recognized)*
+
 ### macOS (`launchd`)
-On macOS hosts, KimiBridge runs as a LaunchAgent:
+On macOS hosts, StudioRelay runs as a LaunchAgent:
 
 ```bash
-python3 -m kimibridge.cli restart
-python3 -m kimibridge.cli logs
+studiorelay restart
+studiorelay logs
 ```
 
 ### Windows (Task Scheduler)
-On Windows hosts, KimiBridge runs via Task Scheduler as `KimiBridge`:
+On Windows hosts, StudioRelay runs via Task Scheduler as `StudioRelay`:
 
 ```powershell
-python -m kimibridge.cli restart
-python -m kimibridge.cli doctor
+studiorelay restart
+studiorelay doctor
 ```
 
 ---
 
 ## Installation Issues
 
-### `fatal: destination path 'kimi-bridge' already exists and is not an empty directory`
+### `fatal: destination path 'studio-relay' already exists and is not an empty directory`
 
-This happens when `git clone` is executed while a `kimi-bridge` folder already exists locally. To update your installation:
+This happens when `git clone` is executed while a directory already exists locally. To update your installation:
 
 ```bash
-cd kimi-bridge
+cd studio-relay
 git pull origin main
 ./installers/install-deepseek.sh
 ```
@@ -230,24 +231,21 @@ bash ./installers/install-deepseek.sh
 
 ---
 
-## Upgrading KimiBridge
+## Migrating from KimiBridge to StudioRelay
 
-When updating to a new version of KimiBridge:
+To migrate an existing installation safely:
 
-1. Pull the latest repository updates:
+1. Safely migrate configuration:
    ```bash
-   cd kimi-bridge
-   git pull origin main
+   studiorelay migrate --dry-run
+   studiorelay migrate
    ```
-2. Run the installer:
+2. Reinstall background services:
    ```bash
-   # macOS / Linux (DeepSeek)
-   ./installers/install-deepseek.sh
-
-   # macOS / Linux (General)
    ./installers/install.sh
-
-   # Windows
-   .\installers\install.ps1
    ```
-The installer automatically preserves your existing configuration file (`~/.kimibridge/config.json`), updates the application files, and restarts the background service.
+3. Run diagnostics to confirm healthy operation:
+   ```bash
+   studiorelay doctor
+   ```
+The installer automatically stops the previous `kimibridge` service to avoid port collisions and starts the new `studiorelay` service.

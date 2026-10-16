@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-APP_NAME="kimibridge"
-SERVICE_NAME="kimibridge"
-INSTALL_DIR="${KIMIBRIDGE_INSTALL_DIR:-$HOME/.kimibridge/app}"
-CONFIG_DIR="$HOME/.kimibridge"
+APP_NAME="studiorelay"
+SERVICE_NAME="studiorelay"
+INSTALL_DIR="${STUDIORELAY_INSTALL_DIR:-${KIMIBRIDGE_INSTALL_DIR:-$HOME/.studiorelay/app}}"
+CONFIG_DIR="$HOME/.studiorelay"
+LEGACY_CONFIG_DIR="$HOME/.kimibridge"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 log() {
@@ -53,16 +54,35 @@ install_source() {
     -cf - . | tar -C "$INSTALL_DIR" -xf -
   chmod +x "$INSTALL_DIR"/installers/*.sh 2>/dev/null || true
   chmod +x "$INSTALL_DIR"/scripts/*.sh 2>/dev/null || true
+
+  # If legacy configuration directory exists, migrate configurations safely
+  if [ -d "$LEGACY_CONFIG_DIR" ] && [ -n "$(ls -A "$LEGACY_CONFIG_DIR"/*.json 2>/dev/null || true)" ]; then
+    log "Existing KimiBridge configuration found at $LEGACY_CONFIG_DIR."
+    log "Migrating configuration to StudioRelay..."
+    local py
+    py="$(detect_python || true)"
+    if [ -n "$py" ]; then
+      "$py" -c "
+import sys
+sys.path.insert(0, '$REPO_ROOT')
+from studiorelay.config import migrate_legacy_configuration
+res = migrate_legacy_configuration()
+if res.get('copied'):
+    print(f'Migrated: {\", \".join(res[\"copied\"])}')
+" 2>/dev/null || true
+    fi
+  fi
 }
 
 install_binary() {
   local binary_path="$1"
   mkdir -p "$INSTALL_DIR/bin" "$CONFIG_DIR"
-  cp "$binary_path" "$INSTALL_DIR/bin/kimibridge"
-  chmod +x "$INSTALL_DIR/bin/kimibridge"
+  cp "$binary_path" "$INSTALL_DIR/bin/studiorelay"
+  chmod +x "$INSTALL_DIR/bin/studiorelay"
+  ln -sf "$INSTALL_DIR/bin/studiorelay" "$INSTALL_DIR/bin/kimibridge"
 }
 
-MACOS_LABEL="com.kimibridge.proxy"
+MACOS_LABEL="com.studiorelay.proxy"
 
 configure_port() {
   local exec_cmd="$1"
@@ -91,6 +111,11 @@ install_macos_service() {
     extra_arg="--provider $provider_arg"
   fi
 
+  local template="$INSTALL_DIR/services/macos/com.studiorelay.proxy.plist"
+  if [ ! -f "$template" ]; then
+    template="$INSTALL_DIR/services/macos/com.kimibridge.proxy.plist"
+  fi
+
   mkdir -p "$plist_dir"
   awk -v cmd="$exec_cmd" -v dir="$INSTALL_DIR" -v extra="$extra_arg" -v label="$MACOS_LABEL" -v out="$log_out" -v err="$log_err" '
     /__PROGRAM_ARGUMENTS__/ {
@@ -110,7 +135,7 @@ install_macos_service() {
       gsub(/__ERR_LOG_PATH__/, err);
       print;
     }
-  ' "$INSTALL_DIR/services/macos/com.kimibridge.proxy.plist" > "$plist_path"
+  ' "$template" > "$plist_path"
 
   launchctl unload "$plist_path" >/dev/null 2>&1 || true
   launchctl load "$plist_path"
@@ -130,13 +155,18 @@ install_linux_service() {
     provider_flag="--provider $provider_arg"
   fi
 
+  local template="$INSTALL_DIR/services/linux/studiorelay.service"
+  if [ ! -f "$template" ]; then
+    template="$INSTALL_DIR/services/linux/kimibridge.service"
+  fi
+
   mkdir -p "$service_dir"
   sed \
     -e "s#__EXEC_CMD__#$exec_cmd#g" \
     -e "s#__PYTHON_BIN__#$exec_cmd#g" \
     -e "s#__INSTALL_DIR__#$INSTALL_DIR#g" \
     -e "s#__PROVIDER_FLAG__#$provider_flag#g" \
-    "$INSTALL_DIR/services/linux/kimibridge.service" > "$service_path"
+    "$template" > "$service_path"
 
   systemctl --user daemon-reload
   systemctl --user enable "$SERVICE_NAME"
@@ -154,6 +184,16 @@ cleanup_previous_install() {
       local plist_path="$HOME/Library/LaunchAgents/${MACOS_LABEL}.plist"
       launchctl unload "$plist_path" >/dev/null 2>&1 || true
       rm -f "$plist_path"
+
+      # Also unload legacy plist if migrating
+      if [ -n "$provider_arg" ] && [ "$provider_arg" != "all" ]; then
+        local leg_plist="$HOME/Library/LaunchAgents/com.kimibridge.proxy.${provider_arg}.plist"
+        launchctl unload "$leg_plist" >/dev/null 2>&1 || true
+        rm -f "$leg_plist"
+      fi
+      local leg_def="$HOME/Library/LaunchAgents/com.kimibridge.proxy.plist"
+      launchctl unload "$leg_def" >/dev/null 2>&1 || true
+      rm -f "$leg_def"
       ;;
     linux)
       local service_path="$HOME/.config/systemd/user/${service}.service"
@@ -164,40 +204,38 @@ cleanup_previous_install() {
         systemctl --user daemon-reload >/dev/null 2>&1 || true
       fi
 
-      # If this specific provider was running under legacy un-prefixed kimibridge.service,
-      # stop legacy service to migrate cleanly to kimibridge-<provider>.service
-      if [ "$service" != "kimibridge" ] && [ -f "$HOME/.config/systemd/user/kimibridge.service" ]; then
-        local legacy_prov=""
-        if command -v python3 >/dev/null 2>&1; then
-          legacy_prov=$(python3 -c "import sys; sys.path.insert(0, '$REPO_ROOT'); from kimibridge.ports import get_kimibridge_status; info = get_kimibridge_status('127.0.0.1', 5001); print((info or {}).get('provider') or '')" 2>/dev/null || true)
-        fi
-        if [ -z "$legacy_prov" ] && [ -f "$CONFIG_DIR/config.json" ]; then
-          legacy_prov=$(grep -o '"provider": *"[^"]*"' "$CONFIG_DIR/config.json" 2>/dev/null | cut -d'"' -f4 || true)
-        fi
-        if [ -n "$legacy_prov" ] && [ "$legacy_prov" = "$provider_arg" ]; then
-          log "Migrating legacy kimibridge.service for $provider_arg to $service..."
-          systemctl --user stop kimibridge >/dev/null 2>&1 || true
-          systemctl --user disable kimibridge >/dev/null 2>&1 || true
-          rm -f "$HOME/.config/systemd/user/kimibridge.service"
+      # Check for and disable matching legacy kimibridge services to prevent port conflict
+      local legacy_candidates=()
+      if [ -n "$provider_arg" ] && [ "$provider_arg" != "all" ]; then
+        legacy_candidates=("kimibridge-${provider_arg}" "kimibridge")
+      else
+        legacy_candidates=("kimibridge")
+      fi
+      for leg_s in "${legacy_candidates[@]}"; do
+        local leg_path="$HOME/.config/systemd/user/${leg_s}.service"
+        if [ -f "$leg_path" ]; then
+          log "Found legacy service '$leg_s'. Migrating to '$service'..."
+          systemctl --user stop "$leg_s" >/dev/null 2>&1 || true
+          systemctl --user disable "$leg_s" >/dev/null 2>&1 || true
+          rm -f "$leg_path"
           systemctl --user daemon-reload >/dev/null 2>&1 || true
         fi
-      fi
+      done
       ;;
   esac
 
-  # Explicitly remove any existing binary files
-  log "Checking for existing binaries to remove..."
+  # Explicitly remove old binary files to avoid stale paths
+  log "Checking for existing binaries..."
   local binary_candidates=(
+    "$INSTALL_DIR/bin/studiorelay"
+    "$INSTALL_DIR/bin/studiorelay.exe"
     "$INSTALL_DIR/bin/kimibridge"
     "$INSTALL_DIR/bin/kimibridge.exe"
-    "$CONFIG_DIR/bin/kimibridge"
-    "$CONFIG_DIR/bin/kimibridge.exe"
+    "$HOME/.local/bin/studiorelay"
     "$HOME/.local/bin/kimibridge"
-    "$HOME/.local/bin/kimibridge.exe"
   )
   for bin_loc in "${binary_candidates[@]}"; do
     if [ -f "$bin_loc" ] || [ -L "$bin_loc" ]; then
-      log "Removing existing binary: $bin_loc"
       rm -f "$bin_loc"
     fi
   done
@@ -208,7 +246,6 @@ cleanup_previous_install() {
   # Remove existing build artifacts if not running in explicit binary install mode
   if [ "$binary_mode" = false ]; then
     if [ -d "$REPO_ROOT/dist" ]; then
-      log "Removing existing build artifacts: $REPO_ROOT/dist"
       rm -rf "$REPO_ROOT/dist"
     fi
     if [ -d "$REPO_ROOT/build" ]; then
@@ -223,8 +260,8 @@ main() {
   local python_bin=""
   local exec_cmd=""
   local binary_candidate
-  local provider="${KIMIBRIDGE_PROVIDER:-}"
-  local base_url="${KIMIBRIDGE_BASE_URL:-}"
+  local provider="${STUDIORELAY_PROVIDER:-${KIMIBRIDGE_PROVIDER:-}}"
+  local base_url="${STUDIORELAY_BASE_URL:-${KIMIBRIDGE_BASE_URL:-}}"
   local requested_port=""
   local use_binary_mode=false
 
@@ -291,7 +328,7 @@ main() {
           ;;
       esac
     else
-      if [ ! -f "$CONFIG_DIR/config.json" ]; then
+      if [ ! -f "$CONFIG_DIR/config.json" ] && [ ! -f "$LEGACY_CONFIG_DIR/config.json" ]; then
         provider="deepseek"
       fi
     fi
@@ -303,18 +340,21 @@ main() {
   fi
 
   if [ -n "$provider" ] && [ "$provider" != "all" ]; then
-    SERVICE_NAME="kimibridge-$provider"
-    MACOS_LABEL="com.kimibridge.proxy.$provider"
+    SERVICE_NAME="studiorelay-$provider"
+    MACOS_LABEL="com.studiorelay.proxy.$provider"
   else
-    SERVICE_NAME="kimibridge"
-    MACOS_LABEL="com.kimibridge.proxy"
+    SERVICE_NAME="studiorelay"
+    MACOS_LABEL="com.studiorelay.proxy"
   fi
 
   os="$(detect_os)"
   arch="$(detect_arch)"
-  binary_candidate="$REPO_ROOT/dist/kimibridge-${os}-${arch}"
+  binary_candidate="$REPO_ROOT/dist/studiorelay-${os}-${arch}"
+  if [ ! -f "$binary_candidate" ]; then
+    binary_candidate="$REPO_ROOT/dist/kimibridge-${os}-${arch}"
+  fi
 
-  log "KimiBridge Installer"
+  log "StudioRelay Installer"
   log "OS: $os ($arch)"
   log "Target Provider: ${provider:-default}"
   log "Service Name: $SERVICE_NAME"
@@ -327,13 +367,13 @@ main() {
   if [ "$use_binary_mode" = true ] && [ -f "$binary_candidate" ]; then
     log "Found standalone binary artifact: $binary_candidate"
     install_binary "$binary_candidate"
-    exec_cmd="$INSTALL_DIR/bin/kimibridge"
+    exec_cmd="$INSTALL_DIR/bin/studiorelay"
   else
     if [ "$use_binary_mode" = true ]; then
       log "Standalone binary not found at $binary_candidate. Falling back to Python runtime."
     fi
     python_bin="$(detect_python || fail 'python3 is required on host when standalone binary is not built. Install python3 (e.g., sudo apt install python3) or build a standalone binary via python3 scripts/build_binary.py.')"
-    exec_cmd="$python_bin -m kimibridge.cli"
+    exec_cmd="$python_bin -m studiorelay.cli"
   fi
 
   cd "$INSTALL_DIR"
@@ -361,11 +401,11 @@ main() {
   esac
 
   local active_port
-  active_port=$(python3 -c "from kimibridge.config import load_config; print(load_config(provider='$provider').server.port)" 2>/dev/null || echo "5001")
+  active_port=$(python3 -c "from studiorelay.config import load_config; print(load_config(provider='$provider').server.port)" 2>/dev/null || echo "5001")
 
   log ""
   log "============================================================"
-  log "  KimiBridge (${provider:-default}) is ready for Android Studio!"
+  log "  StudioRelay (${provider:-default}) is ready for Android Studio!"
   log "============================================================"
   log "  Provider:  ${provider:-default}"
   log "  Base URL:  http://127.0.0.1:${active_port}/v1"
@@ -375,8 +415,8 @@ main() {
 
   # Display all active endpoints if multiple instances exist
   python3 -c "
-from kimibridge.config import list_configured_providers
-from kimibridge.health import check_health
+from studiorelay.config import list_configured_providers
+from studiorelay.health import check_health
 cfgs = list_configured_providers()
 if len(cfgs) > 1:
     print('  Active Configured Endpoints:')

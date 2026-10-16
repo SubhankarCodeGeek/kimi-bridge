@@ -48,13 +48,18 @@ def normalize_provider_name(provider: str | None) -> str:
 def config_path_for(provider: str | None = None, path: Path | None = None) -> Path:
     if path is not None:
         return path
-    env_config = os.environ.get("KIMIBRIDGE_CONFIG")
+    env_config = os.environ.get("STUDIORELAY_CONFIG") or os.environ.get("KIMIBRIDGE_CONFIG")
     if env_config:
         return Path(env_config)
     p = normalize_provider_name(provider)
-    if p and p not in {"all", "both", "auto", "default"}:
-        return Path.home() / ".kimibridge" / f"config-{p}.json"
-    return Path.home() / ".kimibridge" / "config.json"
+    filename = f"config-{p}.json" if p and p not in {"all", "both", "auto", "default"} else "config.json"
+    sr_path = Path.home() / ".studiorelay" / filename
+    if sr_path.exists():
+        return sr_path
+    legacy_path = Path.home() / ".kimibridge" / filename
+    if legacy_path.exists():
+        return legacy_path
+    return legacy_path
 
 
 def default_config_path(provider: str | None = None) -> Path:

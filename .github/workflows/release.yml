@@ -37,6 +37,7 @@ jobs:
         with:
           name: binary-${{ matrix.os }}
           path: |
+            dist/studiorelay-*
             dist/kimibridge-*
 
   publish-release:
@@ -60,7 +61,7 @@ jobs:
           mkdir -p final-dist
           find release-artifacts -type f -exec cp {} final-dist/ \;
           cd final-dist
-          sha256sum kimibridge-* > SHA256SUMS.txt
+          sha256sum studiorelay-* kimibridge-* 2>/dev/null > SHA256SUMS.txt || sha256sum * > SHA256SUMS.txt
 
       - name: Create Release
         uses: softprops/action-gh-release@v2

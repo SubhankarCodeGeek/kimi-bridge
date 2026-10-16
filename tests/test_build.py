@@ -9,8 +9,8 @@ from scripts.build_binary import compute_sha256, generate_checksums, get_target_
 class BuildBinaryTests(unittest.TestCase):
     def test_get_target_info_format(self) -> None:
         target_stem, target_name = get_target_info()
-        self.assertTrue(target_stem.startswith("kimibridge-"))
-        self.assertTrue(target_name.startswith("kimibridge-"))
+        self.assertTrue(target_stem.startswith("studiorelay-"))
+        self.assertTrue(target_name.startswith("studiorelay-"))
         self.assertIn("-", target_stem)
 
     def test_compute_sha256(self) -> None:

@@ -1,5 +1,5 @@
 param(
-    [string]$BaseUrl = $env:KIMIBRIDGE_BASE_URL,
+    [string]$BaseUrl = $(if ($env:STUDIORELAY_BASE_URL) { $env:STUDIORELAY_BASE_URL } else { $env:KIMIBRIDGE_BASE_URL }),
     [int]$Port = 0
 )
 

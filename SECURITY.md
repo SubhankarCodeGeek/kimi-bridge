@@ -1,10 +1,10 @@
 # Security Policy
 
-KimiBridge is designed to run locally and bind only to `127.0.0.1` by default.
+StudioRelay is designed to run locally and bind only to `127.0.0.1` by default.
 
 ## Secrets
 
-KimiBridge must not:
+StudioRelay must not:
 
 - log API keys
 - print `Authorization` headers

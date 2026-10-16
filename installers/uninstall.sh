@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-INSTALL_DIR="${KIMIBRIDGE_INSTALL_DIR:-$HOME/.kimibridge/app}"
-CONFIG_DIR="$HOME/.kimibridge"
+INSTALL_DIR="${STUDIORELAY_INSTALL_DIR:-${KIMIBRIDGE_INSTALL_DIR:-$HOME/.studiorelay/app}}"
+LEGACY_INSTALL_DIR="$HOME/.kimibridge/app"
+CONFIG_DIR="$HOME/.studiorelay"
+LEGACY_CONFIG_DIR="$HOME/.kimibridge"
 
 detect_os() {
   case "$(uname -s)" in
@@ -28,6 +30,8 @@ uninstall_macos_service() {
 
   if [ -n "$provider" ]; then
     local candidates=(
+      "$plist_dir/com.studiorelay.proxy.${provider}.plist"
+      "$plist_dir/com.studiorelay.${provider}.plist"
       "$plist_dir/com.kimibridge.proxy.${provider}.plist"
       "$plist_dir/com.kimibridge.${provider}.plist"
     )
@@ -38,7 +42,7 @@ uninstall_macos_service() {
       fi
     done
   else
-    for p in "$plist_dir"/*kimibridge*.plist; do
+    for p in "$plist_dir"/*studiorelay*.plist "$plist_dir"/*kimibridge*.plist; do
       if [ -f "$p" ]; then
         launchctl unload "$p" >/dev/null 2>&1 || true
         rm -f "$p"
@@ -56,24 +60,35 @@ uninstall_linux_service() {
   fi
 
   if [ -n "$provider" ]; then
-    local sname="kimibridge-${provider}"
-    systemctl --user stop "$sname" >/dev/null 2>&1 || true
-    systemctl --user disable "$sname" >/dev/null 2>&1 || true
-    rm -f "$service_dir/${sname}.service"
+    local targets=(
+      "studiorelay-${provider}"
+      "kimibridge-${provider}"
+    )
+    for sname in "${targets[@]}"; do
+      systemctl --user stop "$sname" >/dev/null 2>&1 || true
+      systemctl --user disable "$sname" >/dev/null 2>&1 || true
+      rm -f "$service_dir/${sname}.service"
+    done
 
-    # Also check if legacy un-prefixed kimibridge.service exists for this provider
-    if [ -f "$service_dir/kimibridge.service" ] && [ -f "$CONFIG_DIR/config.json" ]; then
-      local legacy_prov
-      legacy_prov=$(grep -o '"provider": *"[^"]*"' "$CONFIG_DIR/config.json" 2>/dev/null | cut -d'"' -f4 || true)
-      if [ "$legacy_prov" = "$provider" ]; then
-        systemctl --user stop kimibridge >/dev/null 2>&1 || true
-        systemctl --user disable kimibridge >/dev/null 2>&1 || true
-        rm -f "$service_dir/kimibridge.service"
+    # Check un-prefixed services
+    for base in "studiorelay" "kimibridge"; do
+      if [ -f "$service_dir/${base}.service" ]; then
+        for cdir in "$CONFIG_DIR" "$LEGACY_CONFIG_DIR"; do
+          if [ -f "$cdir/config.json" ]; then
+            local prov
+            prov=$(grep -o '"provider": *"[^"]*"' "$cdir/config.json" 2>/dev/null | cut -d'"' -f4 || true)
+            if [ "$prov" = "$provider" ]; then
+              systemctl --user stop "$base" >/dev/null 2>&1 || true
+              systemctl --user disable "$base" >/dev/null 2>&1 || true
+              rm -f "$service_dir/${base}.service"
+            fi
+          fi
+        done
       fi
-    fi
+    done
   else
-    # Remove all kimibridge user services
-    for sfile in "$service_dir"/kimibridge*.service; do
+    # Remove all studiorelay and kimibridge user services
+    for sfile in "$service_dir"/studiorelay*.service "$service_dir"/kimibridge*.service; do
       if [ -f "$sfile" ]; then
         local base
         base=$(basename "$sfile" .service)
@@ -88,28 +103,29 @@ uninstall_linux_service() {
 
 has_other_providers() {
   local target_provider="$1"
-  if [ ! -d "$CONFIG_DIR" ]; then
-    return 1
-  fi
-
-  for cfg in "$CONFIG_DIR"/config-*.json; do
-    if [ -f "$cfg" ]; then
-      local p
-      p=$(basename "$cfg" .json)
-      p="${p#config-}"
-      if [ "$p" != "$target_provider" ]; then
-        return 0
-      fi
+  for cdir in "$CONFIG_DIR" "$LEGACY_CONFIG_DIR"; do
+    if [ -d "$cdir" ]; then
+      for cfg in "$cdir"/config-*.json; do
+        if [ -f "$cfg" ]; then
+          local p
+          p=$(basename "$cfg" .json)
+          p="${p#config-}"
+          if [ "$p" != "$target_provider" ]; then
+            return 0
+          fi
+        fi
+      done
     fi
   done
 
   # Check if other systemd services exist
   local sdir="$HOME/.config/systemd/user"
   if [ -d "$sdir" ]; then
-    for sfile in "$sdir"/kimibridge-*.service; do
+    for sfile in "$sdir"/studiorelay-*.service "$sdir"/kimibridge-*.service; do
       if [ -f "$sfile" ]; then
         local sname
         sname=$(basename "$sfile" .service)
+        sname="${sname#studiorelay-}"
         sname="${sname#kimibridge-}"
         if [ "$sname" != "$target_provider" ]; then
           return 0
@@ -165,7 +181,7 @@ main() {
     esac
 
     if has_other_providers "$provider"; then
-      printf '%s\n' "KimiBridge ($provider) background service was stopped and removed."
+      printf '%s\n' "StudioRelay ($provider) background service was stopped and removed."
       printf '%s\n' "Other configured providers remain active. Shared binaries at $INSTALL_DIR were preserved."
       printf '%s\n' "Configuration remains at $CONFIG_DIR/config-$provider.json"
       return 0
@@ -177,21 +193,29 @@ main() {
     esac
 
     if command -v pkill >/dev/null 2>&1; then
+      pkill -f "studiorelay" >/dev/null 2>&1 || true
       pkill -f "kimibridge" >/dev/null 2>&1 || true
     fi
   fi
 
+  # Remove binaries and app directories
+  rm -f "$INSTALL_DIR/bin/studiorelay"
   rm -f "$INSTALL_DIR/bin/kimibridge"
+  rm -f "$HOME/.local/bin/studiorelay"
   rm -f "$HOME/.local/bin/kimibridge"
-  rm -f "$HOME/.kimibridge/bin/kimibridge"
+  rm -f "$LEGACY_INSTALL_DIR/bin/kimibridge"
   rm -rf "$INSTALL_DIR"
 
+  if [ "$uninstall_all" = true ] && [ -d "$LEGACY_INSTALL_DIR" ]; then
+    rm -rf "$LEGACY_INSTALL_DIR"
+  fi
+
   if [ -n "$provider" ]; then
-    printf '%s\n' "KimiBridge ($provider) service, binaries, and app files were removed."
-    printf '%s\n' "User config remains at $CONFIG_DIR/config-$provider.json"
+    printf '%s\n' "StudioRelay ($provider) service, binaries, and app files were removed."
+    printf '%s\n' "User config remains preserved at $CONFIG_DIR/config-$provider.json"
   else
-    printf '%s\n' "All KimiBridge services, binaries, and app files were removed."
-    printf '%s\n' "User configs remain in $CONFIG_DIR"
+    printf '%s\n' "All StudioRelay services, binaries, and app files were removed."
+    printf '%s\n' "User configs remain safely preserved in $CONFIG_DIR"
   fi
 }
 

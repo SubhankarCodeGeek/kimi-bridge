@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.3.0
+
+- **Project Rebranding: KimiBridge → StudioRelay**:
+  - Rebrand the project identity to **StudioRelay** ("*One IDE Agent. Multiple AI Models. Zero Vendor Lock-in.*").
+  - Introduce primary Python distribution and package namespace: `studiorelay`.
+  - Introduce primary CLI executable: `studiorelay` (with subcommands `start`, `setup`, `doctor`, `status`, `stop`, `restart`, `logs`, `config`, `migrate`, `uninstall`).
+- **Full Backward Compatibility Layer**:
+  - Preserve `kimibridge` Python package as an import alias that delegates to `studiorelay`.
+  - Register `kimibridge` console entry point pointing to the same CLI runner so existing scripts and tools remain functional.
+  - Support `python3 -m kimibridge.cli` execution seamlessly.
+- **Configuration & Migration**:
+  - Introduce `~/.studiorelay/` as the new configuration directory while preserving existing `~/.kimibridge/` installations.
+  - Implement deterministic configuration precedence: `STUDIORELAY_CONFIG` > `KIMIBRIDGE_CONFIG` > `~/.studiorelay/` > `~/.kimibridge/`.
+  - Add `studiorelay migrate` command supporting `--dry-run` and safe execution with timestamped backups and zero secret exposure.
+- **Service & Installer Lifecycle**:
+  - Introduce `studiorelay.service` and `studiorelay-<provider>.service` systemd user service definitions and macOS `com.studiorelay.proxy.plist` descriptors.
+  - Upgrade `installers/install.sh`, `installers/uninstall.sh`, and PowerShell equivalents to detect legacy `kimibridge` services, stopping them cleanly to prevent port collisions.
+  - Preserve user configuration files during installation, updates, and uninstallation.
+- **Android Studio & Provider Compatibility**:
+  - Retain 100% compatibility with Android Studio's AI agent across `/v1/chat/completions`, `/v1/responses`, and `/v1/models`.
+  - Preserve DeepSeek and Kimi/Moonshot support, `developer` ➔ `system` role normalization, reasoning-to-visible-text fallback, and SSE streaming.
+
 ## 0.2.3
 
 - **Concurrent Multi-Provider Hosting & Port Isolation**:
